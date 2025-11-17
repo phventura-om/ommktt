@@ -8,16 +8,12 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 import urllib3
 
-from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto, buscar_cnpj_google_serper
+from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto
 from receita_scraper import consultar_receita
-from organizador_sheets import atualizar_planilha_completa  # ✅ integração com Sheets
+from organizador_sheets import atualizar_planilha_completa  # já sem cred_path
 
-# Desativa avisos SSL chatos
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ==========================================================
-# ⚙️ CONFIGURAÇÕES GERAIS
-# ==========================================================
 MAX_REQ_PER_SEC = 3
 
 DOMINIOS_BANIDOS = [
@@ -30,18 +26,16 @@ EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 PHONE_REGEX = r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}"
 WHATS_REGEX = r"(?:(?:\+55\s?)?\(?\d{2}\)?\s?)?(?:9\d{4}|[2-9]\d{3})-?\d{4}"
 
-# caches simples em memória
 cache_cnpj = {}
 cache_dominios = {}
-cache_redes_sociais = {}
 cache_contatos = {}
+cache_redes_sociais = {}
 
 
 # ==========================================================
-# 🔍 BUSCA (DuckDuckGo)
+# Helpers
 # ==========================================================
 def buscar_duckduckgo(termo, num_results=25):
-    """Busca gratuita via DuckDuckGo."""
     time.sleep(1 / MAX_REQ_PER_SEC)
     try:
         with DDGS() as ddgs:
@@ -54,105 +48,83 @@ def buscar_duckduckgo(termo, num_results=25):
                 }
                 for r in results
             ]
-    except Exception as e:
-        print(f"⚠ Erro DuckDuckGo: {e}")
+    except:
         return []
 
 
 def filtrar_resultados(resultados):
-    """Remove sites genéricos e domínios repetidos."""
     vistos = set()
-    filtrados = []
+    out = []
     for r in resultados:
-        link = r.get("link", "")
+        link = r.get("link")
         if not link:
             continue
         try:
-            dominio = link.split("/")[2]
-        except Exception:
+            dom = link.split("/")[2]
+        except:
             continue
-
-        if any(d in dominio for d in DOMINIOS_BANIDOS):
+        if any(d in dom for d in DOMINIOS_BANIDOS):
             continue
-        if dominio in vistos:
+        if dom in vistos:
             continue
-
-        vistos.add(dominio)
-        filtrados.append(r)
-
-    return filtrados
+        vistos.add(dom)
+        out.append(r)
+    return out
 
 
-# ==========================================================
-# 📞 EXTRAÇÃO DE CONTATOS
-# ==========================================================
 def extrair_contatos_site(url):
-    """Busca e-mail, telefone e WhatsApp em algumas páginas padrão do site."""
     contatos = {"email": "", "telefone": "", "whatsapp": ""}
     if not url:
         return contatos
-
     try:
         dominio = url.split("/")[2]
-    except Exception:
+    except:
         dominio = ""
-
-    if dominio and dominio in cache_contatos:
+    if dominio in cache_contatos:
         return cache_contatos[dominio]
 
-    caminhos_contato = ["", "/contato", "/fale-conosco", "/sobre", "/quem-somos"]
-    for caminho in caminhos_contato:
-        link = url.rstrip("/") + caminho
+    caminhos = ["", "/contato", "/fale-conosco", "/sobre", "/quem-somos"]
+    for c in caminhos:
+        link = url.rstrip("/") + c
         try:
-            resp = requests.get(
-                link,
-                timeout=10,
-                verify=False,
-                headers={"User-Agent": "Mozilla/5.0"}
-            )
-            if resp.status_code != 200:
+            r = requests.get(link, timeout=10, verify=False,
+                             headers={"User-Agent": "Mozilla/5.0"})
+            if r.status_code != 200:
                 continue
-
-            text = BeautifulSoup(resp.text, "html.parser").get_text(" ")
+            txt = BeautifulSoup(r.text, "html.parser").get_text(" ")
 
             if not contatos["email"]:
-                emails = re.findall(EMAIL_REGEX, text)
-                if emails:
-                    contatos["email"] = emails[0]
+                em = re.findall(EMAIL_REGEX, txt)
+                if em:
+                    contatos["email"] = em[0]
 
             if not contatos["telefone"]:
-                tels = re.findall(PHONE_REGEX, text)
-                if tels:
-                    contatos["telefone"] = tels[0]
+                ph = re.findall(PHONE_REGEX, txt)
+                if ph:
+                    contatos["telefone"] = ph[0]
 
             if not contatos["whatsapp"]:
-                whats = re.findall(WHATS_REGEX, text)
-                if whats:
-                    contatos["whatsapp"] = whats[0]
+                ws = re.findall(WHATS_REGEX, txt)
+                if ws:
+                    contatos["whatsapp"] = ws[0]
 
             if any(contatos.values()):
                 break
-
-        except Exception:
+        except:
             continue
 
-    if dominio:
-        cache_contatos[dominio] = contatos
+    cache_contatos[dominio] = contatos
     return contatos
 
 
-# ==========================================================
-# 🌐 REDES SOCIAIS
-# ==========================================================
 def buscar_redes_sociais(nome):
     if nome in cache_redes_sociais:
         return cache_redes_sociais[nome]
 
     termo = f"{nome} instagram facebook linkedin"
-    resultados = buscar_duckduckgo(termo)
+    res = buscar_duckduckgo(termo)
     redes = {"instagram": "", "facebook": "", "linkedin": ""}
-
-    for r in resultados:
+    for r in res:
         link = r.get("link", "")
         if "instagram.com" in link and not redes["instagram"]:
             redes["instagram"] = link
@@ -160,48 +132,47 @@ def buscar_redes_sociais(nome):
             redes["facebook"] = link
         elif "linkedin.com" in link and not redes["linkedin"]:
             redes["linkedin"] = link
-
     cache_redes_sociais[nome] = redes
     return redes
 
 
 # ==========================================================
-# 🎯 FILTRO GENÉRICO DE ICP
+# ICP (CEMIG PF e PJ)
 # ==========================================================
-def is_bom_lead(texto, include_keywords, exclude_keywords, capital, capital_minimo):
-    """
-    Aplica filtro textual + capital mínimo.
-    - include_keywords: se não estiver vazio → exige pelo menos uma palavra presente
-    - exclude_keywords: se palavra aparecer → exclui
-    """
+def is_icp_cemig(texto, consumo, tipo):
     texto = texto.lower()
 
-    # palavras de exclusão
-    for p in exclude_keywords or []:
-        if p.lower() in texto:
-            return False
-
-    # palavras de inclusão
-    if include_keywords:
-        if not any(p.lower() in texto for p in include_keywords):
-            return False
-
-    # capital mínimo
-    if capital_minimo and capital and capital < capital_minimo:
+    # deve ser CEMIG
+    if not any(x in texto for x in ["mg", "minas gerais", "cemig"]):
         return False
+
+    # PF: consumo >= 500
+    if tipo == "PF" and consumo < 500:
+        return False
+
+    # PJ: consumo >= 500 (ideal 1000)
+    if tipo == "PJ" and consumo < 500:
+        return False
+
+    # motivos típicos
+    motivos = [
+        "redução de custo",
+        "economia de energia",
+        "economizar luz",
+        "energia sustentável",
+        "sem instalação",
+        "economizar"
+    ]
+    if not any(m in texto for m in motivos):
+        return True  # não obrigatório 100%
 
     return True
 
 
 # ==========================================================
-# 🧩 PROCESSAMENTO DE UMA EMPRESA
+# Processamento
 # ==========================================================
 def processar_empresa(item, termo, config):
-    include_keywords = config["include_keywords"]
-    exclude_keywords = config["exclude_keywords"]
-    capital_minimo = config["capital_minimo"]
-    cidades_permitidas = config["cidades_permitidas"]
-
     nome = item.get("titulo", "").strip()
     link = item.get("link", "")
     desc = item.get("descricao", "")
@@ -209,18 +180,20 @@ def processar_empresa(item, termo, config):
     if not nome:
         return None
 
-    # --- CNPJ ---
+    texto_full = f"{nome} {desc} {termo}"
+
+    # CNPJ
     cnpj = extrair_cnpj_texto(desc)
     if not cnpj and link:
         try:
-            dominio = link.split("/")[2]
-        except Exception:
-            dominio = ""
-        if dominio and dominio not in cache_dominios:
-            cache_dominios[dominio] = extrair_cnpj_site(link)
-        cnpj = cache_dominios.get(dominio)
+            dom = link.split("/")[2]
+        except:
+            dom = ""
+        if dom not in cache_dominios:
+            cache_dominios[dom] = extrair_cnpj_site(link)
+        cnpj = cache_dominios.get(dom)
 
-    # --- Receita Federal ---
+    # Receita
     receita = None
     if cnpj:
         receita = cache_cnpj.get(cnpj)
@@ -228,200 +201,122 @@ def processar_empresa(item, termo, config):
             try:
                 receita = consultar_receita(cnpj)
                 cache_cnpj[cnpj] = receita
-            except Exception:
+            except:
                 receita = None
 
-    # --- Contatos ---
+    # Contatos
     contatos = extrair_contatos_site(link)
     if not any(contatos.values()):
         return None
 
-    # --- Porte, município, capital ---
-    porte = ""
+    # Dados receita
+    consumo = 0
     municipio = ""
-    capital = 0
-    if receita and isinstance(receita, dict):
-        porte = str(
-            receita.get("porte")
-            or receita.get("porte_da_empresa")
-            or receita.get("porte_empresa")
-            or ""
-        ).upper()
-        municipio = str(receita.get("municipio") or "").upper()
-        capital_str = str(receita.get("capital_social") or "")
-        capital = float(re.sub(r"[^\d]", "", capital_str) or 0)
+    porte = ""
 
-    # descarta ME/EPP
-    if porte in ["ME", "MICRO EMPRESA", "EPP", "EMPRESA DE PEQUENO PORTE"]:
-        return None
-
-    # filtra município
-    if cidades_permitidas and municipio and municipio not in cidades_permitidas:
-        return None
-
-    # filtro de ICP
-    texto_full = f"{nome} {desc} {termo}"
-    if not is_bom_lead(texto_full, include_keywords, exclude_keywords, capital, capital_minimo):
-        return None
-
-    # --- Redes sociais + score ---
-    redes = buscar_redes_sociais(nome)
-    score = 0
-    if contatos.get("email"):
-        score += 2
-    if contatos.get("telefone"):
-        score += 2
-    if contatos.get("whatsapp"):
-        score += 3
-    if redes.get("instagram"):
-        score += 1
-    if redes.get("facebook"):
-        score += 1
-    if redes.get("linkedin"):
-        score += 1
     if receita:
-        score += 1
+        municipio = str(receita.get("municipio", "")).upper()
+        cap_str = str(receita.get("capital_social", "")).replace(".", "").replace(",", "")
+        consumo = int(re.sub(r"[^\d]", "", cap_str) or 0)
+        porte = str(receita.get("porte", "")).upper()
 
-    dados = {
+    # Filtrar ME/EPP
+    if porte in ["ME", "MICRO EMPRESA", "EPP"]:
+        return None
+
+    # Aplicar ICP CEMIG
+    if not is_icp_cemig(texto_full, consumo, config["tipo_cliente"]):
+        return None
+
+    redes = buscar_redes_sociais(nome)
+
+    lead = {
         "nome": nome,
         "url": link,
         "descricao": desc,
-        "termo_busca": termo,
         "cnpj": cnpj or "",
         "municipio": municipio,
-        "capital": capital,
+        "capital": consumo,
         "porte": porte,
         **contatos,
         **redes,
-        "lead_score": score,
+        "icp_tipo": config["tipo_cliente"]
     }
 
-    if receita and isinstance(receita, dict):
-        dados.update(receita)
+    if receita:
+        lead.update(receita)
 
-    return dados
+    return lead
 
 
 # ==========================================================
-# 🚀 FUNÇÃO PRINCIPAL DO SCRAPER
+# Função principal
 # ==========================================================
 def run_scraper(config, progress_callback=None):
-    """
-    Roda a prospecção com base em um dict de configuração.
+    termos = config["termos"]
+    cidades = config["cidades"]
 
-    config espera:
-      - termos: list[str]
-      - cidades: list[str] (ex.: 'Belo Horizonte MG')
-      - capital_minimo: int
-      - include_keywords: list[str]
-      - exclude_keywords: list[str]
-      - (opcional) spreadsheet_name: str
-      - (opcional) aba_resumo: str
-      - (opcional) aba_leads: str
+    config["tipo_cliente"] = config.get("tipo_cliente", "PJ")  # PF ou PJ
 
-    progress_callback(opcional): função chamada como
-      progress_callback(current, total, percent)
-    para atualizar barra de progresso no front.
-    """
-
-    termos = config.get("termos", [])
-    cidades = config.get("cidades", [])
-    capital_minimo = int(config.get("capital_minimo", 0))
-    include_keywords = config.get("include_keywords", [])
-    exclude_keywords = config.get("exclude_keywords", [])
-
-    # planilha (com defaults compatíveis com a versão antiga)
-    spreadsheet_name = config.get("spreadsheet_name", "Leads ICP")
-    aba_resumo = config.get("aba_resumo", "resumo_icp")
-    aba_leads = config.get("aba_leads", "leads_organizados")
-
-    # calcula municípios permitidos a partir das cidades
-    cidades_permitidas = []
-    for c in cidades:
-        partes = c.split()
-        if len(partes) >= 2:
-            municipio = " ".join(partes[:-1]).upper()
-            cidades_permitidas.append(municipio)
-
-    # injeta no config para uso interno
-    config["capital_minimo"] = capital_minimo
-    config["include_keywords"] = include_keywords
-    config["exclude_keywords"] = exclude_keywords
-    config["cidades_permitidas"] = cidades_permitidas
-
-    leads_quentes = []
+    leads = []
     tarefas = []
-    empresas_vistas = set()
     pool = ThreadPoolExecutor(max_workers=20)
 
-    # monta tarefas
+    empresas_vistas = set()
+
     for cidade in cidades:
-        for termo_base in termos:
-            termo = f"{termo_base} {cidade}"
-            resultados = filtrar_resultados(buscar_duckduckgo(termo, num_results=25))
-            for item in resultados:
+        for termo in termos:
+            termo_busca = f"{termo} {cidade}"
+            res = filtrar_resultados(buscar_duckduckgo(termo_busca))
+
+            for item in res:
                 nome = item.get("titulo", "").strip()
                 if not nome or nome in empresas_vistas:
                     continue
                 empresas_vistas.add(nome)
-                tarefas.append(pool.submit(processar_empresa, item, termo, config))
+                tarefas.append(pool.submit(processar_empresa, item, termo_busca, config))
 
-    total = len(tarefas) or 1
-    concluido = 0
+    total = len(tarefas)
+    done = 0
 
     for t in as_completed(tarefas):
         try:
             r = t.result()
-        except Exception as e:
-            print("⚠ Erro em tarefa:", e)
-            r = None
+            if r:
+                leads.append(r)
+        except:
+            pass
 
-        if r:
-            leads_quentes.append(r)
-
-        concluido += 1
+        done += 1
         if progress_callback:
-            pct = int(concluido / total * 100)
-            progress_callback(concluido, total, pct)
+            progress_callback(done, total, int(done / total * 100))
 
-    # filtra por score mínimo
-    leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= 6]
-
-    # ======================================================
-    # 📊 Monta RESUMO e TABELA para o Google Sheets
-    # ======================================================
-    # resumo simples da rodada
+    # Criar tabela e resumo
     resumo = [
         ["Métrica", "Valor"],
-        ["Total de leads qualificados", len(leads_quentes)],
-        ["Capital mínimo (filtro)", capital_minimo],
-        ["Cidades pesquisadas", ", ".join(cidades)],
-        ["Termos base", ", ".join(termos)],
+        ["Leads qualificados", len(leads)],
+        ["Tipo de cliente", config["tipo_cliente"]],
+        ["Cidades", ", ".join(cidades)],
+        ["Termos", ", ".join(termos)],
     ]
 
-    # transforma lista de dicts em tabela 2D: [header, linha1, linha2...]
-    tabela_leads = []
-    if leads_quentes:
-        # junta todos os campos que apareceram nos dicionários
-        campos = sorted({k for lead in leads_quentes for k in lead.keys()})
-        tabela_leads.append(campos)
-        for lead in leads_quentes:
-            row = [lead.get(c, "") for c in campos]
-            tabela_leads.append(row)
+    tabela = []
+    if leads:
+        campos = sorted({k for lead in leads for k in lead.keys()})
+        tabela.append(campos)
+        for lead in leads:
+            tabela.append([lead.get(c, "") for c in campos])
 
-    # ✅ Envia para a planilha (sem cred_path; quem cuida disso é o organizador_sheets)
+    # Atualizar sheets sem cred_path
     try:
         atualizar_planilha_completa(
-            spreadsheet_name=spreadsheet_name,
-            aba_resumo=aba_resumo,
-            aba_leads=aba_leads,
+            spreadsheet_name=config.get("spreadsheet_name", "Leads ICP"),
+            aba_resumo=config.get("aba_resumo", "resumo_icp"),
+            aba_leads=config.get("aba_leads", "leads_organizados"),
             base_resumo=resumo,
-            base_final=tabela_leads,
+            base_final=tabela
         )
     except Exception as e:
-        # Se der erro no Sheets, apenas loga no console e segue.
-        # Assim o app ainda mostra os leads normalmente.
-        print(f"⚠ Erro ao atualizar planilha: {e}")
+        print("Erro ao atualizar Sheets:", e)
 
-    # o app Streamlit usa esse retorno para mostrar e baixar CSV
-    return leads_quentes
+    return leads
