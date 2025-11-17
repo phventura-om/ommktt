@@ -8,9 +8,8 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 import urllib3
 
-from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto
+from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto, buscar_cnpj_google_serper
 from receita_scraper import consultar_receita
-from organizador_sheets import atualizar_planilha_completa
 
 # Desativa avisos SSL chatos
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -267,13 +266,20 @@ def processar_empresa(item, termo, config):
     # --- Redes sociais + score ---
     redes = buscar_redes_sociais(nome)
     score = 0
-    if contatos.get("email"): score += 2
-    if contatos.get("telefone"): score += 2
-    if contatos.get("whatsapp"): score += 3
-    if redes.get("instagram"): score += 1
-    if redes.get("facebook"): score += 1
-    if redes.get("linkedin"): score += 1
-    if receita: score += 1
+    if contatos.get("email"):
+        score += 2
+    if contatos.get("telefone"):
+        score += 2
+    if contatos.get("whatsapp"):
+        score += 3
+    if redes.get("instagram"):
+        score += 1
+    if redes.get("facebook"):
+        score += 1
+    if redes.get("linkedin"):
+        score += 1
+    if receita:
+        score += 1
 
     dados = {
         "nome": nome,
@@ -308,7 +314,6 @@ def run_scraper(config, progress_callback=None):
       - capital_minimo: int
       - include_keywords: list[str]
       - exclude_keywords: list[str]
-      - enviar_sheets: bool  (se True, atualiza planilha)
 
     progress_callback(opcional): função chamada como
       progress_callback(current, total, percent)
@@ -320,7 +325,6 @@ def run_scraper(config, progress_callback=None):
     capital_minimo = int(config.get("capital_minimo", 0))
     include_keywords = config.get("include_keywords", [])
     exclude_keywords = config.get("exclude_keywords", [])
-    enviar_sheets = bool(config.get("enviar_sheets", True))
 
     # calcula municípios permitidos a partir das cidades
     cidades_permitidas = []
@@ -374,16 +378,6 @@ def run_scraper(config, progress_callback=None):
     # filtra por score mínimo
     leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= 6]
 
-    # atualiza planilha no Google Sheets (se habilitado)
-    if enviar_sheets and leads_quentes:
-        atualizar_planilha_completa(
-            cred_path="credenciais.json",
-            spreadsheet_name="empresas_leads_quentes",
-            aba_dados="leads",
-            aba_cidade="resumo_cidade",
-            aba_segmento="resumo_segmento",
-            aba_top="top_clientes",
-            base_final=leads_quentes,
-        )
-
+    # sem integração com Google Sheets na versão em nuvem:
+    # o app Streamlit recebe a lista de leads e oferece o download em CSV.
     return leads_quentes
