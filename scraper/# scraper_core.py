@@ -10,6 +10,7 @@ import urllib3
 
 from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto, buscar_cnpj_google_serper
 from receita_scraper import consultar_receita
+from organizador_sheets import atualizar_planilha_completa  # ✅ integração com Sheets
 
 # Desativa avisos SSL chatos
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -314,10 +315,13 @@ def run_scraper(config, progress_callback=None):
       - capital_minimo: int
       - include_keywords: list[str]
       - exclude_keywords: list[str]
+      - (opcional) spreadsheet_name: str
+      - (opcional) aba_resumo: str
+      - (opcional) aba_leads: str
 
     progress_callback(opcional): função chamada como
       progress_callback(current, total, percent)
-    para você atualizar barra de progresso no front.
+    para atualizar barra de progresso no front.
     """
 
     termos = config.get("termos", [])
@@ -325,6 +329,11 @@ def run_scraper(config, progress_callback=None):
     capital_minimo = int(config.get("capital_minimo", 0))
     include_keywords = config.get("include_keywords", [])
     exclude_keywords = config.get("exclude_keywords", [])
+
+    # planilha (com defaults compatíveis com a versão antiga)
+    spreadsheet_name = config.get("spreadsheet_name", "Leads ICP")
+    aba_resumo = config.get("aba_resumo", "resumo_icp")
+    aba_leads = config.get("aba_leads", "leads_organizados")
 
     # calcula municípios permitidos a partir das cidades
     cidades_permitidas = []
@@ -378,6 +387,41 @@ def run_scraper(config, progress_callback=None):
     # filtra por score mínimo
     leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= 6]
 
-    # sem integração com Google Sheets na versão em nuvem:
-    # o app Streamlit recebe a lista de leads e oferece o download em CSV.
+    # ======================================================
+    # 📊 Monta RESUMO e TABELA para o Google Sheets
+    # ======================================================
+    # resumo simples da rodada
+    resumo = [
+        ["Métrica", "Valor"],
+        ["Total de leads qualificados", len(leads_quentes)],
+        ["Capital mínimo (filtro)", capital_minimo],
+        ["Cidades pesquisadas", ", ".join(cidades)],
+        ["Termos base", ", ".join(termos)],
+    ]
+
+    # transforma lista de dicts em tabela 2D: [header, linha1, linha2...]
+    tabela_leads = []
+    if leads_quentes:
+        # junta todos os campos que apareceram nos dicionários
+        campos = sorted({k for lead in leads_quentes for k in lead.keys()})
+        tabela_leads.append(campos)
+        for lead in leads_quentes:
+            row = [lead.get(c, "") for c in campos]
+            tabela_leads.append(row)
+
+    # ✅ Envia para a planilha (sem cred_path; quem cuida disso é o organizador_sheets)
+    try:
+        atualizar_planilha_completa(
+            spreadsheet_name=spreadsheet_name,
+            aba_resumo=aba_resumo,
+            aba_leads=aba_leads,
+            base_resumo=resumo,
+            base_final=tabela_leads,
+        )
+    except Exception as e:
+        # Se der erro no Sheets, apenas loga no console e segue.
+        # Assim o app ainda mostra os leads normalmente.
+        print(f"⚠ Erro ao atualizar planilha: {e}")
+
+    # o app Streamlit usa esse retorno para mostrar e baixar CSV
     return leads_quentes
