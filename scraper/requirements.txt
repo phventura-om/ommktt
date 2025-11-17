@@ -1,3 +1,9 @@
-selenium
-webdriver-manager
+streamlit
 pandas
+requests
+beautifulsoup4
+ddgs
+tqdm
+urllib3
+gspread
+oauth2client
