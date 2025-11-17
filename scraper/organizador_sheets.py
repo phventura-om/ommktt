@@ -1,207 +1,71 @@
 # organizador_sheets.py
-import re
-import unicodedata
-from datetime import datetime
-
+import os
 import gspread
+import streamlit as st
 from oauth2client.service_account import ServiceAccountCredentials
-from gspread.exceptions import WorksheetNotFound
 
-
-# ============================================
-# 🔧 1. AUTENTICAÇÃO / PLANILHA
-# ============================================
-def conectar_planilha(cred_path, spreadsheet_name):
+# ==========================================================
+# 🔌 Função robusta para conectar ao Google Sheets
+# ==========================================================
+def conectar_planilha(spreadsheet_name: str, cred_path: str = "credenciais.json"):
     scope = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
-    client = gspread.authorize(creds)
-    sh = client.open(spreadsheet_name)
-    return sh
 
+    creds = None
 
-def obter_aba(sh, aba_name, rows=2000, cols=30, limpar=True):
-    try:
-        ws = sh.worksheet(aba_name)
-    except WorksheetNotFound:
-        ws = sh.add_worksheet(title=aba_name, rows=str(rows), cols=str(cols))
+    # 1️⃣ Tenta carregar via arquivo local (rodando no VSCode / servidor próprio)
+    if os.path.exists(cred_path):
+        try:
+            creds = ServiceAccountCredentials.from_json_keyfile_name(cred_path, scope)
+            gc = gspread.authorize(creds)
+            return gc.open(spreadsheet_name)
+        except Exception as e:
+            st.error(f"Erro ao carregar credenciais locais: {e}")
 
-    if limpar:
-        ws.clear()
-    return ws
+    # 2️⃣ Se não existe arquivo → tenta via Streamlit Secrets
+    if "gcp_service_account" in st.secrets:
+        try:
+            service_info = dict(st.secrets["gcp_service_account"])
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(service_info, scope)
+            gc = gspread.authorize(creds)
+            return gc.open(spreadsheet_name)
+        except Exception as e:
+            st.error(f"Erro ao carregar credenciais via Streamlit Secrets: {e}")
 
-
-# ============================================
-# 🧼 2. PADRONIZAÇÃO
-# ============================================
-def limpar_texto(txt):
-    if not txt:
-        return ""
-    txt = str(txt)
-    txt = unicodedata.normalize("NFKD", txt)
-    txt = "".join(c for c in txt if not unicodedata.combining(c))
-    return txt.strip()
-
-
-def validar_cnpj(cnpj):
-    if not cnpj:
-        return False
-    cnpj_numbers = re.sub(r"\D", "", str(cnpj))
-    return len(cnpj_numbers) == 14
-
-
-def parse_capital(capital):
-    if not capital:
-        return 0.0
-    s = str(capital).strip()
-    s = s.replace(".", "").replace(",", ".")
-    try:
-        return float(s)
-    except Exception:
-        return 0.0
-
-
-# ============================================
-# 🔧 3. ORGANIZAÇÃO DA BASE
-# ============================================
-def organizar_base(base_final):
-    nova_lista = []
-    vistos = set()
-
-    for item in base_final:
-        nome = limpar_texto(item.get("nome_google", ""))
-        cidade = limpar_texto(item.get("cidade", ""))
-        segmento = limpar_texto(item.get("segmento", ""))
-        cnpj = item.get("cnpj", "")
-
-        chave = (nome.lower(), cidade.lower(), re.sub(r"\D", "", str(cnpj)))
-        if chave in vistos:
-            continue
-        vistos.add(chave)
-
-        if not validar_cnpj(cnpj):
-            continue
-
-        capital = parse_capital(item.get("capital_social", ""))
-
-        novo = {
-            "nome": nome,
-            "cidade": cidade,
-            "segmento": segmento,
-            "cnpj": cnpj,
-            "porte": limpar_texto(item.get("porte", "")),
-            "capital_social": capital,
-            "endereco": limpar_texto(
-                item.get("endereco_receita", item.get("endereco", ""))
-            ),
-            "cnae_principal": limpar_texto(item.get("cnae_principal", "")),
-            "classe_aneel": limpar_texto(item.get("classe_aneel", "")),
-            "descricao_classe": limpar_texto(item.get("descricao_classe", "")),
-            "url": item.get("url", ""),
-        }
-
-        nova_lista.append(novo)
-
-    # ordena por cidade → segmento → nome
-    nova_lista = sorted(
-        nova_lista, key=lambda x: (x["cidade"], x["segmento"], x["nome"])
+    # 3️⃣ Se nada funcionar → erro final
+    raise FileNotFoundError(
+        "Nenhuma credencial encontrada. "
+        "Coloque credenciais.json na raiz OU configure st.secrets['gcp_service_account']."
     )
-    return nova_lista
 
-
-# ============================================
-# 📊 4. RESUMOS / DASHBOARD
-# ============================================
-def gerar_resumo_por_cidade(dados):
-    resumo = {}
-    for d in dados:
-        cidade = d["cidade"] or "N/A"
-        if cidade not in resumo:
-            resumo[cidade] = {"cidade": cidade, "qtd_empresas": 0, "capital_total": 0.0}
-        resumo[cidade]["qtd_empresas"] += 1
-        resumo[cidade]["capital_total"] += d.get("capital_social", 0.0)
-
-    lista = list(resumo.values())
-    lista.sort(key=lambda x: x["qtd_empresas"], reverse=True)
-    return lista
-
-
-def gerar_resumo_por_segmento(dados):
-    resumo = {}
-    for d in dados:
-        seg = d["segmento"] or "N/A"
-        if seg not in resumo:
-            resumo[seg] = {
-                "segmento": seg,
-                "qtd_empresas": 0,
-                "capital_total": 0.0,
-            }
-        resumo[seg]["qtd_empresas"] += 1
-        resumo[seg]["capital_total"] += d.get("capital_social", 0.0)
-
-    lista = list(resumo.values())
-    lista.sort(key=lambda x: x["qtd_empresas"], reverse=True)
-    return lista
-
-
-def selecionar_top_clientes(dados, n=50):
-    base = [d for d in dados if d.get("capital_social", 0) > 0]
-    base.sort(key=lambda x: x["capital_social"], reverse=True)
-    return base[:n]
-
-
-# ============================================
-# 📤 5. EXPORTAÇÃO PARA ABAS
-# ============================================
-def exportar_para_aba(ws, dados):
-    if not dados:
-        print(f"⚠ Nenhum dado para exportar na aba '{ws.title}'.")
-        return
-
-    header = list(dados[0].keys())
-    ws.insert_row(header, 1)
-    linhas = [list(d.values()) for d in dados]
-    ws.insert_rows(linhas, 2)
-    print(f"✔ Aba '{ws.title}' atualizada com {len(linhas)} linhas.")
-
-
+# ==========================================================
+# ✏️ Função principal de atualização
+# ==========================================================
 def atualizar_planilha_completa(
-    cred_path="credenciais.json",
-    spreadsheet_name="icp_completo",
-    aba_dados="dados",
-    aba_cidade="resumo_cidade",
-    aba_segmento="resumo_segmento",
-    aba_top="top_clientes",
-    base_final=None,
+    spreadsheet_name: str,
+    aba_resumo: str,
+    aba_leads: str,
+    base_resumo: list,
+    base_final: list,
+    cred_path: str = "credenciais.json"
 ):
-    if not base_final:
-        print("⚠ Base vazia, nada para enviar ao Sheets.")
-        return
+    # Conecta na planilha
+    sh = conectar_planilha(spreadsheet_name, cred_path)
 
-    print("📊 Organizando base para Google Sheets...")
-    base_limpa = organizar_base(base_final)
+    # Atualiza resumo
+    ws_resumo = sh.worksheet(aba_resumo)
+    ws_resumo.clear()
 
-    sh = conectar_planilha(cred_path, spreadsheet_name)
+    if base_resumo:
+        ws_resumo.update("A1", base_resumo)
 
-    # aba 1: dados completos
-    ws_dados = obter_aba(sh, aba_dados)
-    exportar_para_aba(ws_dados, base_limpa)
+    # Atualiza leads
+    ws_leads = sh.worksheet(aba_leads)
+    ws_leads.clear()
 
-    # aba 2: resumo por cidade
-    resumo_cidade = gerar_resumo_por_cidade(base_limpa)
-    ws_cidade = obter_aba(sh, aba_cidade)
-    exportar_para_aba(ws_cidade, resumo_cidade)
+    if base_final:
+        ws_leads.update("A1", base_final)
 
-    # aba 3: resumo por segmento
-    resumo_segmento = gerar_resumo_por_segmento(base_limpa)
-    ws_seg = obter_aba(sh, aba_segmento)
-    exportar_para_aba(ws_seg, resumo_segmento)
-
-    # aba 4: top clientes (capital)
-    top = selecionar_top_clientes(base_limpa, n=50)
-    ws_top = obter_aba(sh, aba_top)
-    exportar_para_aba(ws_top, top)
-
-    print("✅ Planilha atualizada com base, resumos e top clientes.")
+    return True
