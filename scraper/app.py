@@ -13,144 +13,219 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------
-# ESTILO FUTURISTA / PRODUTO CARO
+# ESTILO FUTURISTA
 # ----------------------------------------------------------
 st.markdown(
     """
     <style>
-    /* Fundo geral */
+    /* Fundo com vibe de painel holográfico */
     body {
-        background: radial-gradient(circle at 10% 0%, #141629 0, #050612 55%, #020308 100%);
-        color: #f9fafb;
+        background: radial-gradient(circle at 5% 0%, #1f2937 0, #020617 45%, #000 100%);
+        color: #e5e7eb;
         font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
     .main {
         background: transparent;
     }
-    /* Container central mais estreito */
     .block-container {
-        max-width: 950px;
+        max-width: 1120px;
         padding-top: 2.5rem;
         padding-bottom: 3rem;
     }
 
-    /* Header / Logo */
-    .om-header {
-        text-align: center;
-        margin-bottom: 2.2rem;
+    /* Hero wrapper */
+    .hero-shell {
+        position: relative;
+        overflow: hidden;
+        border-radius: 24px;
+        padding: 1.6rem 2rem;
+        margin-bottom: 1.8rem;
+        background:
+            radial-gradient(circle at -10% -10%, rgba(96,165,250,0.25), transparent 55%),
+            radial-gradient(circle at 110% 0%, rgba(236,72,153,0.25), transparent 55%),
+            linear-gradient(135deg, rgba(15,23,42,0.98), rgba(15,23,42,0.94));
+        border: 1px solid rgba(148,163,253,0.35);
+        box-shadow:
+            0 0 0 1px rgba(15,23,42,0.95),
+            0 28px 70px rgba(0,0,0,0.9);
+    }
+    .hero-orbit {
+        position: absolute;
+        inset: -40%;
+        background:
+            radial-gradient(circle at 0% 0%, rgba(59,130,246,0.18), transparent 55%),
+            radial-gradient(circle at 100% 100%, rgba(34,211,238,0.18), transparent 60%);
+        opacity: 0.8;
+        filter: blur(2px);
+        pointer-events: none;
+    }
+    .hero-content {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2.4fr);
+        gap: 1.8rem;
+        align-items: center;
+    }
+
+    /* Logo / título à esquerda */
+    .om-logo-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
     }
     .om-logo-pill {
         display: inline-flex;
         align-items: center;
         gap: 0.6rem;
-        padding: 0.45rem 0.9rem;
+        padding: 0.42rem 0.9rem;
         border-radius: 999px;
-        border: 1px solid rgba(96, 165, 250, 0.45);
-        background: radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.75), rgba(15, 23, 42, 0.45));
+        border: 1px solid rgba(96,165,250,0.6);
+        background: radial-gradient(circle at 0 0, rgba(59,130,246,0.8), rgba(15,23,42,0.85));
         box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.9),
-            0 0 22px rgba(59, 130, 246, 0.55);
-        margin-bottom: 1rem;
+            0 0 0 1px rgba(15,23,42,0.9),
+            0 0 22px rgba(56,189,248,0.7);
     }
     .om-logo-mark {
         width: 26px;
         height: 26px;
-        border-radius: 11px;
+        border-radius: 10px;
         background: conic-gradient(from 210deg, #22d3ee, #4f46e5, #ec4899, #22d3ee);
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 0 18px rgba(59, 130, 246, 0.7);
+        box-shadow: 0 0 16px rgba(59,130,246,0.85);
     }
     .om-logo-mark span {
-        font-size: 0.9rem;
+        font-size: 0.78rem;
         font-weight: 800;
         color: #020617;
     }
     .om-logo-text {
-        font-size: 0.9rem;
+        font-size: 0.86rem;
         font-weight: 600;
-        letter-spacing: 0.2em;
+        letter-spacing: 0.22em;
         text-transform: uppercase;
         color: #e5e7eb;
     }
     .om-title {
-        font-size: 2.2rem;
+        font-size: 2.1rem;
         font-weight: 800;
-        letter-spacing: 0.08em;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
         background: linear-gradient(120deg, #38bdf8, #a855f7, #f97316);
         -webkit-background-clip: text;
         color: transparent;
-        margin-bottom: 0.4rem;
     }
     .om-subtitle {
-        font-size: 0.95rem;
+        font-size: 0.9rem;
         color: #9ca3af;
         text-transform: uppercase;
         letter-spacing: 0.18em;
     }
-
-    /* Card principal (form) */
-    .om-card {
-        background: radial-gradient(circle at 0 0, rgba(148, 163, 253, 0.12), rgba(15, 23, 42, 0.96));
-        border-radius: 24px;
-        padding: 1.8rem 2rem 1.6rem 2rem;
-        border: 1px solid rgba(148, 163, 253, 0.35);
-        box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.9),
-            0 26px 60px rgba(0, 0, 0, 0.85);
+    .hero-copy {
+        margin-top: 0.75rem;
+        font-size: 0.92rem;
+        color: #cbd5f5;
+        max-width: 30rem;
+        line-height: 1.6;
     }
 
-    /* Card de resultados */
-    .om-card-secondary {
-        background: radial-gradient(circle at 100% 0, rgba(96, 165, 250, 0.12), rgba(15, 23, 42, 0.98));
-        border-radius: 22px;
-        padding: 1.4rem 1.6rem 1.4rem 1.6rem;
-        border: 1px solid rgba(55, 65, 81, 0.9);
-        box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.85),
-            0 18px 42px rgba(0, 0, 0, 0.75);
-        margin-top: 1.4rem;
+    /* Chips de benefícios */
+    .hero-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+        margin-top: 0.7rem;
     }
-
-    .om-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-        font-size: 0.7rem;
+    .hero-chip {
+        font-size: 0.72rem;
         text-transform: uppercase;
         letter-spacing: 0.16em;
-        background: radial-gradient(circle at 0 0, rgba(52, 211, 153, 0.2), rgba(30, 64, 175, 0.8));
-        color: #d1fae5;
-        border: 1px solid rgba(52, 211, 153, 0.6);
+        padding: 0.32rem 0.7rem;
+        border-radius: 999px;
+        border: 1px solid rgba(148,163,253,0.6);
+        background: radial-gradient(circle at 0 0, rgba(129,140,248,0.32), rgba(15,23,42,0.9));
+        color: #e5e7eb;
     }
-    .om-pill-dot {
+
+    /* Lado direito do hero com “painel holográfico” */
+    .hero-panel {
+        border-radius: 22px;
+        padding: 1.2rem 1.4rem;
+        background:
+            radial-gradient(circle at 0 0, rgba(59,130,246,0.25), transparent 55%),
+            radial-gradient(circle at 120% 0, rgba(236,72,153,0.22), transparent 55%),
+            linear-gradient(to bottom right, rgba(15,23,42,0.95), rgba(15,23,42,0.9));
+        border: 1px solid rgba(148,163,253,0.5);
+        box-shadow: 0 18px 40px rgba(15,23,42,0.9);
+    }
+    .hero-panel-title {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: #9ca3af;
+        margin-bottom: 0.6rem;
+    }
+    .hero-metric-row {
+        display: flex;
+        gap: 1.2rem;
+        margin-bottom: 0.7rem;
+    }
+    .hero-metric {
+        flex: 1;
+    }
+    .hero-metric-label {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: #6b7280;
+        margin-bottom: 0.2rem;
+    }
+    .hero-metric-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #e5e7eb;
+    }
+    .hero-metric-badge {
+        font-size: 0.72rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 999px;
+        border: 1px solid rgba(74,222,128,0.6);
+        background: radial-gradient(circle at 0 0, rgba(34,197,94,0.25), transparent 55%);
+        color: #bbf7d0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-top: 0.25rem;
+    }
+    .hero-metric-dot {
         width: 8px;
         height: 8px;
         border-radius: 50%;
         background: #4ade80;
-        box-shadow: 0 0 10px rgba(74, 222, 128, 0.95);
+        box-shadow: 0 0 10px rgba(74,222,128,0.95);
+    }
+    .hero-panel-footer {
+        margin-top: 0.75rem;
+        font-size: 0.78rem;
+        color: #94a3b8;
     }
 
-    .om-card-title {
-        margin-top: 1rem;
-        font-size: 1.25rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-    }
-    .om-card-text {
-        font-size: 0.9rem;
-        color: #9ca3af;
-        margin-top: 0.4rem;
-        line-height: 1.5;
+    /* Card principal (config) */
+    .om-card {
+        background: linear-gradient(145deg, rgba(15,23,42,0.98), rgba(15,23,42,0.92));
+        border-radius: 22px;
+        padding: 1.6rem 1.8rem 1.5rem 1.8rem;
+        border: 1px solid rgba(30,64,175,0.7);
+        box-shadow:
+            0 0 0 1px rgba(15,23,42,0.95),
+            0 22px 58px rgba(0,0,0,0.9);
+        margin-bottom: 1.1rem;
     }
 
     .om-label {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.14em;
@@ -158,7 +233,7 @@ st.markdown(
         margin-bottom: 0.25rem;
     }
     .om-help {
-        font-size: 0.75rem;
+        font-size: 0.74rem;
         color: #6b7280;
         margin-top: 0.15rem;
     }
@@ -175,60 +250,59 @@ st.markdown(
         letter-spacing: 0.18em;
     }
 
-    /* Inputs / textareas com cara de produto */
+    /* Inputs */
     textarea, .stTextInput>div>div>input, .stNumberInput input {
-        background-color: rgba(15, 23, 42, 0.9) !important;
+        background-color: rgba(15,23,42,0.96) !important;
         border-radius: 14px !important;
-        border: 1px solid rgba(75, 85, 99, 0.9) !important;
+        border: 1px solid rgba(55,65,81,0.95) !important;
         color: #e5e7eb !important;
         font-size: 0.9rem !important;
     }
     textarea:focus, .stTextInput>div>div>input:focus, .stNumberInput input:focus {
-        border-color: rgba(96, 165, 250, 0.9) !important;
-        box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.8) !important;
+        border-color: rgba(96,165,250,0.95) !important;
+        box-shadow: 0 0 0 1px rgba(37,99,235,0.85) !important;
         outline: none !important;
     }
 
     /* Botão principal */
     .stButton>button {
         border-radius: 999px !important;
-        padding: 0.65rem 0 !important;
+        padding: 0.7rem 0 !important;
         font-weight: 600 !important;
-        letter-spacing: 0.08em !important;
+        letter-spacing: 0.12em !important;
         text-transform: uppercase !important;
-        border: 1px solid rgba(56, 189, 248, 0.8) !important;
+        border: 1px solid rgba(56,189,248,0.9) !important;
         background: linear-gradient(135deg, #0ea5e9, #6366f1) !important;
         box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.9),
-            0 14px 30px rgba(37, 99, 235, 0.65) !important;
+            0 0 0 1px rgba(15,23,42,0.95),
+            0 18px 40px rgba(37,99,235,0.85) !important;
         color: #f9fafb !important;
     }
     .stButton>button:hover {
         filter: brightness(1.08);
         box-shadow:
-            0 0 0 1px rgba(15, 23, 42, 0.9),
-            0 18px 36px rgba(59, 130, 246, 0.85) !important;
+            0 0 0 1px rgba(15,23,42,0.95),
+            0 22px 48px rgba(59,130,246,0.95) !important;
     }
 
-    /* Download button */
+    /* Botão de download */
     .stDownloadButton>button {
         border-radius: 999px !important;
-        border: 1px solid rgba(148, 163, 253, 0.85) !important;
-        background: linear-gradient(135deg, rgba(79, 70, 229, 0.92), rgba(59, 130, 246, 0.95)) !important;
+        border: 1px solid rgba(148,163,253,0.95) !important;
+        background: linear-gradient(135deg, rgba(79,70,229,0.96), rgba(59,130,246,0.98)) !important;
         color: #e5e7eb !important;
         font-weight: 600 !important;
         letter-spacing: 0.08em !important;
         text-transform: uppercase !important;
         padding: 0.55rem 0 !important;
         box-shadow:
-            0 0 0 1px rgba(17, 24, 39, 0.9),
-            0 16px 34px rgba(30, 64, 175, 0.85) !important;
+            0 0 0 1px rgba(15,23,42,1),
+            0 18px 46px rgba(30,64,175,0.98) !important;
     }
     .stDownloadButton>button:hover {
         filter: brightness(1.06);
     }
 
-    /* Progress bar mais discreta */
     .stProgress > div > div > div > div {
         background: linear-gradient(90deg, #22c55e, #22d3ee) !important;
     }
@@ -238,49 +312,72 @@ st.markdown(
 )
 
 # ----------------------------------------------------------
-# HEADER / LOGO
+# HERO
 # ----------------------------------------------------------
 st.markdown(
     """
-    <div class="om-header">
-        <div class="om-logo-pill">
-            <div class="om-logo-mark"><span>OM</span></div>
-            <div class="om-logo-text">MKT · DATA ENGINE</div>
+    <div class="hero-shell">
+        <div class="hero-orbit"></div>
+        <div class="hero-content">
+            <div class="om-logo-stack">
+                <div class="om-logo-pill">
+                    <div class="om-logo-mark"><span>OM</span></div>
+                    <div class="om-logo-text">MKT · DATA ENGINE</div>
+                </div>
+                <div class="om-title">Lead Scraper</div>
+                <div class="om-subtitle">
+                    prospecção inteligente · icp dinâmico · leads em tempo real
+                </div>
+                <p class="hero-copy">
+                    Um painel de prospecção que parece software enterprise — mas roda direto no seu navegador.
+                    Desenhe o ICP, clique em iniciar e deixe a OM MKT coletar os próximos leads quentes da sua operação B2B.
+                </p>
+                <div class="hero-chips">
+                    <div class="hero-chip">scraper proprietário</div>
+                    <div class="hero-chip">filtro por icp & capital</div>
+                    <div class="hero-chip">dados prontos para abordagem</div>
+                </div>
+            </div>
+            <div class="hero-panel">
+                <div class="hero-panel-title">Painel de operação</div>
+                <div class="hero-metric-row">
+                    <div class="hero-metric">
+                        <div class="hero-metric-label">batch típico</div>
+                        <div class="hero-metric-value">120–300</div>
+                        <div class="hero-metric-badge">
+                            <span class="hero-metric-dot"></span>
+                            leads qualificados por rodada
+                        </div>
+                    </div>
+                    <div class="hero-metric">
+                        <div class="hero-metric-label">foco</div>
+                        <div class="hero-metric-value">B2B</div>
+                        <div class="hero-metric-badge">
+                            <span class="hero-metric-dot"></span>
+                            decisores & alto tíquete
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-panel-footer">
+                    Conecte o ICP do cliente, baixe o CSV e pluga direto no CRM, fluxo de SDR ou n8n.
+                    O motor de coleta, enriquecimento e filtro roda por baixo da interface.
+                </div>
+            </div>
         </div>
-        <div class="om-title">Lead Scraper</div>
-        <div class="om-subtitle">prospecção inteligente • dados em escala • operação plug & play</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
 # ----------------------------------------------------------
-# TUDO CENTRALIZADO EM UMA COLUNA
+# CARD CENTRAL – CONFIG + RESULTADO
 # ----------------------------------------------------------
-_, center_col, _ = st.columns([0.1, 0.8, 0.1])
+_, center_col, _ = st.columns([0.08, 0.84, 0.08])
 
 with center_col:
-    # ------------------------ CARD FORM -------------------
+    # ---------------- CONFIG ----------------
     st.markdown('<div class="om-card">', unsafe_allow_html=True)
 
-    st.markdown(
-        """
-        <div class="om-badge">
-            <span class="om-pill-dot"></span>
-            configuração de icp & mercado alvo
-        </div>
-        <div class="om-card-title">Desenhe o alvo, o motor faz o resto</div>
-        <p class="om-card-text">
-            Defina como você quer atacar o mercado: segmentos, cidades e filtros.
-            O OM MKT Scraper transforma isso em uma operação de prospecção ativa com cara de produto enterprise.
-        </p>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.write("")
-
-    # Termos
     st.markdown('<div class="om-label">Termos de busca</div>', unsafe_allow_html=True)
     termos_raw = st.text_area(
         "",
@@ -295,7 +392,6 @@ with center_col:
 
     st.write("")
 
-    # Cidades
     st.markdown('<div class="om-label">Cidades / mercados</div>', unsafe_allow_html=True)
     cidades_raw = st.text_area(
         "",
@@ -343,10 +439,10 @@ with center_col:
     st.write("")
     start_button = st.button("⚡ Iniciar prospecção", use_container_width=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)  # fecha om-card
+    st.markdown("</div>", unsafe_allow_html=True)  # fecha card de config
 
-    # --------------------- CARD RESULTADOS ----------------
-    st.markdown('<div class="om-card-secondary">', unsafe_allow_html=True)
+    # ---------------- RESULTADOS ----------------
+    st.markdown('<div class="om-card">', unsafe_allow_html=True)
 
     status_placeholder = st.empty()
     progress_bar = st.progress(0)
@@ -356,8 +452,9 @@ with center_col:
 
     st.markdown("</div>", unsafe_allow_html=True)
 
+
 # ----------------------------------------------------------
-# LÓGICA AO CLICAR NO BOTÃO
+# LÓGICA DO BOTÃO
 # ----------------------------------------------------------
 if start_button:
     status_placeholder.empty()
@@ -430,7 +527,11 @@ if start_button:
                 unsafe_allow_html=True,
             )
 
-            cols_show = [c for c in ["nome", "municipio", "email", "telefone", "whatsapp", "lead_score", "url"] if c in df.columns]
+            cols_show = [
+                c for c in
+                ["nome", "municipio", "email", "telefone", "whatsapp", "lead_score", "url"]
+                if c in df.columns
+            ]
             tabela_placeholder.dataframe(df[cols_show], use_container_width=True)
 
             csv_buffer = io.StringIO()
