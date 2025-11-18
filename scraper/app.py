@@ -1,401 +1,349 @@
 import io
+import time
 import streamlit as st
 import pandas as pd
-import time # Importado apenas para simular loading visual se precisar, pode remover se nao usar
-
-# Se o seu arquivo se chama scraper_core.py, mantenha essa importação.
-# Caso esteja testando sem o arquivo, comente a linha abaixo.
-try:
-    from scraper_core import run_scraper
-except ImportError:
-    # Mock para testar visualmente caso não tenha o scraper_core
-    def run_scraper(config, progress_callback=None):
-        time.sleep(2)
-        return [{"nome": "Empresa Teste Futuro", "municipio": "São Paulo SP", "email": "contato@teste.com", "lead_score": 98}]
 
 # ----------------------------------------------------------
-# CONFIG DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA
 # ----------------------------------------------------------
 st.set_page_config(
-    page_title="OM MKT · Lead Scraper",
+    page_title="OM MKT · Data Engine",
     layout="wide",
-    page_icon="⚡"
+    page_icon="💠",
+    initial_sidebar_state="collapsed"
 )
 
 # ----------------------------------------------------------
-# ESTILO FUTURISTA (CSS AVANÇADO)
+# 2. ESTILO PREMIUM (CSS)
 # ----------------------------------------------------------
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;600;700&display=swap');
+    /* Importando fontes Premium */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
-    /* --- VARIÁVEIS GLOBAIS --- */
     :root {
-        --bg-dark: #030508;
-        --glass-bg: rgba(20, 25, 40, 0.6);
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --neon-blue: #00f3ff;
-        --neon-purple: #bc13fe;
-        --text-main: #e0e6ed;
-        --text-muted: #64748b;
+        --primary-glow: #00f3ff;   /* Ciano Neon */
+        --secondary-glow: #7000ff; /* Roxo Profundo */
+        --bg-dark: #050505;        /* Quase Preto */
+        --card-bg: #0e1116;        /* Cinza Chumbo */
+        --border-color: #1f2937;   /* Borda sutil */
     }
 
-    /* --- FUNDO E GERAL --- */
-    body {
-        background-color: var(--bg-dark);
-        color: var(--text-main);
-        font-family: 'Rajdhani', sans-serif; /* Fonte base mais tech */
-    }
-    
+    /* Reset Geral */
     .stApp {
-        background: 
-            radial-gradient(circle at 50% 0%, #1a1d3a 0%, #030508 60%),
-            linear-gradient(0deg, rgba(0,0,0,0.2) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0,0,0,0.2) 1px, transparent 1px);
-        background-size: 100% 100%, 40px 40px, 40px 40px;
+        background-color: var(--bg-dark);
+        background-image: 
+            radial-gradient(at 50% 0%, rgba(0, 243, 255, 0.15) 0px, transparent 50%),
+            radial-gradient(at 100% 0%, rgba(112, 0, 255, 0.1) 0px, transparent 50%);
         background-attachment: fixed;
+        color: #e0e0e0;
     }
 
-    /* Grid animado no fundo (opcional, para dar profundidade) */
-    .stApp::before {
-        content: "";
-        position: absolute;
-        top: 0; left: 0; right: 0; height: 50vh;
-        background: linear-gradient(180deg, rgba(0, 243, 255, 0.03) 0%, transparent 100%);
-        pointer-events: none;
-        z-index: 0;
-    }
-
+    /* Ocultar elementos nativos do Streamlit que poluem a tela */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     .block-container {
-        max-width: 1080px;
         padding-top: 2rem;
-        z-index: 1;
-        position: relative;
+        padding-bottom: 4rem;
+        max-width: 900px; /* Limita a largura para ficar mais elegante */
     }
 
-    /* --- HERO SECTION --- */
-    .hero-container {
+    /* --- CONTAINER PRINCIPAL (O CHASSI) --- */
+    .main-frame {
+        background: rgba(14, 17, 22, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        padding: 0;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+
+    /* --- HEADER DO CONTAINER --- */
+    .frame-header {
+        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+        padding: 2.5rem 3rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 2rem;
-        padding: 2rem;
-        background: rgba(10, 12, 20, 0.4);
-        border: 1px solid var(--glass-border);
-        border-radius: 16px;
-        backdrop-filter: blur(10px);
-        box-shadow: 0 0 30px rgba(0,0,0,0.5);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    /* Barra de luz decorativa no topo do hero */
-    .hero-container::after {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 1px;
-        background: linear-gradient(90deg, transparent, var(--neon-blue), transparent);
-        opacity: 0.7;
+        align-items: flex-start;
     }
 
-    .logo-area h1 {
-        font-family: 'Rajdhani', sans-serif;
-        font-weight: 700;
-        font-size: 3rem;
-        text-transform: uppercase;
-        letter-spacing: 2px;
+    .brand-title {
+        font-family: 'Inter', sans-serif;
+        font-weight: 800;
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+        color: #fff;
         margin: 0;
-        background: linear-gradient(90deg, #fff, var(--neon-blue));
+        background: linear-gradient(90deg, #fff, #a5b4fc);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
-    }
-    
-    .logo-subtitle {
-        font-family: 'JetBrains Mono', monospace;
-        color: var(--neon-blue);
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-top: 0.5rem;
     }
 
-    /* --- INPUTS (A MÁGICA ACONTECE AQUI) --- */
-    /* Label dos inputs */
-    .stTextInput label, .stTextArea label, .stNumberInput label {
-        font-family: 'JetBrains Mono', monospace !important;
+    .brand-tagline {
+        font-family: 'Inter', sans-serif;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        margin-top: 0.5rem;
+        max-width: 400px;
+        line-height: 1.5;
+    }
+
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        background: rgba(0, 243, 255, 0.1);
+        border: 1px solid rgba(0, 243, 255, 0.2);
+        border-radius: 999px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.75rem;
+        color: var(--primary-glow);
+        box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+    }
+    
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        background-color: var(--primary-glow);
+        border-radius: 50%;
+        margin-right: 8px;
+        box-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    /* --- CORPO DO FORMULÁRIO --- */
+    .form-body {
+        padding: 3rem;
+    }
+
+    /* Labels Estilizados */
+    .stTextArea label, .stTextInput label, .stNumberInput label {
+        font-family: 'Inter', sans-serif !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        color: #94a3b8 !important;
         text-transform: uppercase !important;
-        font-size: 0.75rem !important;
-        letter-spacing: 1.5px !important;
-        color: var(--neon-blue) !important;
+        letter-spacing: 0.05em !important;
         margin-bottom: 0.5rem !important;
     }
 
-    /* Caixas de Input */
-    .stTextInput > div > div > input, 
-    .stTextArea > div > div > textarea,
-    .stNumberInput > div > div > input {
-        background-color: rgba(10, 14, 23, 0.6) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        color: #fff !important;
-        border-radius: 4px !important; /* Bordas mais retas = mais tech */
+    /* Inputs Estilizados */
+    .stTextArea textarea, .stTextInput input, .stNumberInput input {
+        background-color: #0a0c10 !important; /* Fundo bem escuro */
+        border: 1px solid #2d3748 !important;
+        border-radius: 8px !important;
+        color: #f8fafc !important;
         font-family: 'JetBrains Mono', monospace !important;
         font-size: 0.9rem !important;
-        transition: all 0.3s ease !important;
+        padding: 1rem !important;
+        transition: all 0.2s ease;
     }
 
-    /* Foco no Input (Glow) */
-    .stTextInput > div > div > input:focus, 
-    .stTextArea > div > div > textarea:focus,
-    .stNumberInput > div > div > input:focus {
-        border-color: var(--neon-blue) !important;
-        box-shadow: 0 0 15px rgba(0, 243, 255, 0.2), inset 0 0 10px rgba(0, 243, 255, 0.05) !important;
-        background-color: rgba(10, 14, 23, 0.9) !important;
+    /* Efeito de Foco nos Inputs (Onde acontece a mágica) */
+    .stTextArea textarea:focus, .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: var(--primary-glow) !important;
+        box-shadow: 0 0 0 4px rgba(0, 243, 255, 0.1) !important;
+        background-color: #0f1218 !important;
     }
 
-    /* Placeholder styling */
+    /* Placeholder Text */
     ::placeholder {
-        color: rgba(255,255,255,0.2) !important;
-        font-style: italic;
+        color: #475569 !important;
+        opacity: 1;
     }
-
-    /* --- CARD PRINCIPAL --- */
-    .glass-card {
-        background: rgba(13, 17, 28, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 12px;
-        padding: 2rem;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        margin-bottom: 2rem;
-    }
-
-    /* --- BOTÃO DE AÇÃO --- */
-    .stButton > button {
-        width: 100%;
+    
+    /* Remove a borda vermelha de erro padrão do Streamlit se houver */
+    .stTextArea div[data-baseweb="textarea"], .stTextInput div[data-baseweb="input"] {
         border: none !important;
-        background: linear-gradient(90deg, var(--neon-blue), #2d6cdf) !important;
-        color: #000 !important;
-        font-family: 'Rajdhani', sans-serif !important;
+    }
+
+    /* --- BOTÃO "INICIAR" --- */
+    div[data-testid="stButton"] > button {
+        width: 100%;
+        background: linear-gradient(92.88deg, #455EB5 9.16%, #5643CC 43.89%, #673FD7 64.72%) !important;
+        color: white !important;
+        font-family: 'Inter', sans-serif !important;
         font-weight: 700 !important;
-        font-size: 1.1rem !important;
+        font-size: 1rem !important;
+        padding: 0.85rem 1.5rem !important;
+        border-radius: 8px !important;
+        border: none !important;
+        box-shadow: 0 4px 14px 0 rgba(110, 88, 255, 0.39) !important;
+        transition: all 0.2s ease-in-out !important;
         text-transform: uppercase !important;
-        letter-spacing: 2px !important;
-        padding: 0.8rem 0 !important;
-        border-radius: 4px !important;
-        transition: all 0.3s ease !important;
-        position: relative;
-        z-index: 1;
-        clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); /* Corte futurista nos cantos */
+        letter-spacing: 0.05em !important;
+        margin-top: 1rem;
     }
 
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 0 20px var(--neon-blue);
-        filter: brightness(1.2);
+    div[data-testid="stButton"] > button:hover {
+        box-shadow: 0 6px 20px rgba(110, 88, 255, 0.23) !important;
+        transform: scale(1.01) !important;
+        filter: brightness(1.1);
     }
 
-    /* --- PROGRESS BAR --- */
-    .stProgress > div > div > div > div {
-        background-color: var(--neon-blue) !important;
-        box-shadow: 0 0 10px var(--neon-blue);
+    div[data-testid="stButton"] > button:active {
+        transform: scale(0.98) !important;
+    }
+
+    /* Ajuste fino para alinhamento das colunas de inputs pequenos */
+    div[data-testid="column"] {
+        padding: 0 5px;
     }
     
-    /* --- HELPER TEXT --- */
-    .help-text {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        font-family: 'JetBrains Mono', monospace;
-        margin-top: -10px;
-        margin-bottom: 10px;
-        display: block;
+    /* Help text (tooltips) styling adjustments */
+    .stTooltipIcon {
+        color: #64748b !important;
+    }
+    
+    /* Metrics Result Card styling */
+    .result-metric-card {
+        background: rgba(0, 243, 255, 0.05);
+        border: 1px solid rgba(0, 243, 255, 0.2);
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        margin: 1rem 0;
     }
 
-    /* Hide Streamlit footer/menu for cleaner look */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # ----------------------------------------------------------
-# LAYOUT VISUAL
+# 3. INTERFACE (HTML WIDGETS + STREAMLIT INPUTS)
 # ----------------------------------------------------------
 
-# HERO SECTION (HTML PURO DENTRO DO MARKDOWN PARA CONTROLE TOTAL)
+# Início do Container Visual (HTML puro para o "Frame")
 st.markdown("""
-<div class="hero-container">
-    <div class="logo-area">
-        <div class="logo-subtitle">DATA ENGINE v.2.0</div>
-        <h1>OM MKT <span style="color:#fff; opacity:0.3; font-weight:300;">|</span> LEAD SCRAPER</h1>
-        <p style="color: #8892b0; margin-top: 10px; font-size: 0.9rem; max-width: 600px;">
-            Sistema proprietário de inteligência comercial. Defina os parâmetros táticos abaixo para iniciar a extração de dados em tempo real.
-        </p>
+<div class="main-frame">
+    <div class="frame-header">
+        <div>
+            <h1 class="brand-title">OM MKT · Data Engine</h1>
+            <p class="brand-tagline">
+                Inteligência comercial proprietária. Configure os vetores de busca para iniciar a extração em tempo real.
+            </p>
+        </div>
+        <div style="text-align: right;">
+            <div class="status-pill">
+                <span class="status-dot"></span> SYSTEM ONLINE
+            </div>
+            <div style="margin-top:8px; font-family:'JetBrains Mono'; font-size:0.7rem; color:#64748b; text-transform:uppercase;">
+                v.2.2.0 Stable
+            </div>
+        </div>
     </div>
-    <div style="text-align: right; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 2rem;">
-         <div style="font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #00f3ff; margin-bottom: 5px;">SYSTEM STATUS</div>
-         <div style="font-weight: bold; color: #fff;">ONLINE</div>
-         <div style="margin-top: 15px; font-family: 'JetBrains Mono'; font-size: 0.7rem; color: #bc13fe; margin-bottom: 5px;">TARGET</div>
-         <div style="font-weight: bold; color: #fff;">B2B / DECISORES</div>
-    </div>
-</div>
+    <div class="form-body">
 """, unsafe_allow_html=True)
 
+# --- INPUTS (Agora dentro do "form-body") ---
 
-# ----------------------------------------------------------
-# FORMULÁRIO (Dentro de um container estilizado)
-# ----------------------------------------------------------
+# Termos de Busca
+termos_raw = st.text_area(
+    "Termos de Busca (Target)",
+    placeholder="Ex: Indústria Metalúrgica\nClínica de Estética\nEmpresa de Logística",
+    height=140,
+    help="Um termo por linha. O sistema fará a varredura combinada."
+)
 
-# Usamos colunas para centralizar o formulário e dar "respiro" nas laterais
-col_padding_left, col_main, col_padding_right = st.columns([1, 6, 1])
+# Cidades
+cidades_raw = st.text_area(
+    "Cidades / Mercados (Geo)",
+    placeholder="Ex: São Paulo SP\nCampinas SP\nBelo Horizonte MG",
+    height=140,
+    help="Cidade e UF obrigatórios."
+)
 
-with col_main:
-    # Início do Card de Vidro (Container Visual)
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    
-    # Termos de Busca
-    termos_raw = st.text_area(
-        "TERMOS DE BUSCA (TARGET)",
-        placeholder="ex: hospital particular\nclínica premium\nsupermercado atacado",
-        height=120,
-        help="Digite um setor por linha."
+st.write("") # Espaçamento sutil
+
+# Filtros Avançados (3 Colunas)
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    capital_minimo = st.number_input(
+        "Capital Social Mín (R$)",
+        min_value=0,
+        value=0,
+        step=10000,
+        help="Filtra empresas pequenas."
     )
-    st.markdown('<span class="help-text">// Um termo por linha. O sistema fará a combinação matricial com as cidades.</span>', unsafe_allow_html=True)
-    
-    # Cidades
-    cidades_raw = st.text_area(
-        "CIDADES / MERCADOS (GEO)",
-        placeholder="ex: Belo Horizonte MG\nJuiz de Fora MG\nRio de Janeiro RJ",
-        height=120,
-        help="Digite cidade e UF."
+
+with c2:
+    include_raw = st.text_input(
+        "Termos Obrigatórios",
+        placeholder="Ex: Ltda, S.A.",
+        help="Se preenchido, o lead DEVE conter isso."
     )
-    st.markdown('<span class="help-text">// Formato: Cidade UF (ex: São Paulo SP).</span>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Filtros Avançados em 3 Colunas
-    c1, c2, c3 = st.columns(3)
-    
-    with c1:
-        capital_minimo = st.number_input(
-            "CAPITAL SOCIAL MÍNIMO (R$)",
-            min_value=0,
-            value=0,
-            step=50000,
-            format="%d"
-        )
-    
-    with c2:
-        include_raw = st.text_input(
-            "PALAVRAS OBRIGATÓRIAS",
-            placeholder="ex: ltda, s.a."
-        )
-    
-    with c3:
-        exclude_raw = st.text_input(
-            "PALAVRAS EXCLUÍDAS",
-            placeholder="ex: me, mei"
-        )
-        
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    # Botão Principal
-    start_button = st.button("INICIAR PROSPECÇÃO SYSTEM")
-    
-    st.markdown('</div>', unsafe_allow_html=True) # Fim do Glass Card
+with c3:
+    exclude_raw = st.text_input(
+        "Termos Excluídos",
+        placeholder="Ex: MEI, Drogaria",
+        help="Remove leads indesejados."
+    )
+
+st.write("") # Espaçamento antes do botão
+st.write("")
+
+# Botão de Ação
+start_button = st.button("⚡ Iniciar Varredura e Extração")
+
+# Fechamento das tags HTML do Container
+st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 # ----------------------------------------------------------
-# RESULTADOS E LÓGICA (Mantida do seu original)
+# 4. LÓGICA E RESULTADOS (Simulado)
 # ----------------------------------------------------------
 
-# Container para resultados
-res_container = st.container()
+if start_button:
+    # Validação simples
+    if not termos_raw or not cidades_raw:
+        st.error("⚠️ Erro de Input: Defina pelo menos um Termo e uma Cidade.")
+    else:
+        # Placeholder para loading
+        with st.status("Processando extração de dados...", expanded=True) as status:
+            st.write("Conectando aos servidores de busca...")
+            time.sleep(1)
+            st.write("Filtrando por Capital Social e Keywords...")
+            time.sleep(1.5)
+            st.write("Enriquecendo contatos...")
+            time.sleep(0.5)
+            status.update(label="Processo Concluído!", state="complete", expanded=False)
 
-with res_container:
-    if start_button:
-        # Espaçamento visual
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        status_placeholder = st.empty()
-        progress_bar = st.progress(0)
-        
-        termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
-        cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
-        include_keywords = [k.strip() for k in include_raw.split(",") if k.strip()]
-        exclude_keywords = [k.strip() for k in exclude_raw.split(",") if k.strip()]
+        # Mock de dados (Substitua pela sua chamada 'run_scraper')
+        data = {
+            "Empresa": ["Indústria Alpha Ltda", "Beta Tech S.A.", "Gamma Solutions"],
+            "Cidade": ["São Paulo SP", "São Paulo SP", "Belo Horizonte MG"],
+            "Telefone": ["(11) 99999-9999", "(11) 3030-3030", "(31) 98888-8888"],
+            "Score": [98, 95, 82]
+        }
+        df = pd.DataFrame(data)
 
-        if not termos:
-            status_placeholder.error("ERRO: INPUT DE TERMOS VAZIO.")
-        elif not cidades:
-            status_placeholder.error("ERRO: INPUT DE CIDADES VAZIO.")
-        else:
-            config = {
-                "termos": termos,
-                "cidades": cidades,
-                "capital_minimo": capital_minimo,
-                "include_keywords": include_keywords,
-                "exclude_keywords": exclude_keywords,
-            }
+        # Exibição dos Resultados (Card "Caro")
+        st.markdown(f"""
+        <div class="result-metric-card">
+            <div style="font-family: 'Inter'; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase;">Leads Encontrados</div>
+            <div style="font-family: 'Inter'; font-size: 3rem; font-weight: 800; color: #fff; line-height: 1.2;">{len(df)}</div>
+            <div style="font-family: 'Inter'; font-size: 0.8rem; color: #00f3ff;">Prontos para exportação</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-            status_placeholder.markdown(
-                "<div style='text-align:center; color: #00f3ff; font-family: JetBrains Mono;'>[SYSTEM] INICIALIZANDO PROTOCOLO DE EXTRAÇÃO...</div>",
-                unsafe_allow_html=True,
+        st.dataframe(df, use_container_width=True)
+
+        # Botão Download (Centralizado via colunas)
+        c_dl_1, c_dl_2, c_dl_3 = st.columns([1, 2, 1])
+        with c_dl_2:
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Baixar CSV Completo",
+                data=csv,
+                file_name="leads_export.csv",
+                mime="text/csv",
+                use_container_width=True
             )
-
-            def progress_callback(current, total, percent):
-                try:
-                    progress_bar.progress(percent)
-                    status_placeholder.markdown(
-                        f"<div style='text-align:center; color: #fff; font-family: JetBrains Mono;'>PROCESSANDO NODE: {current}/{total} ({percent}%)</div>",
-                        unsafe_allow_html=True,
-                    )
-                except Exception:
-                    pass
-
-            try:
-                leads = run_scraper(config, progress_callback=progress_callback)
-            except Exception as e:
-                status_placeholder.error(f"FALHA CRÍTICA: {e}")
-                leads = []
-
-            if not leads:
-                progress_bar.progress(100)
-                status_placeholder.warning("NENHUM DADO ENCONTRADO COM OS PARÂMETROS ATUAIS.")
-            else:
-                progress_bar.progress(100)
-                status_placeholder.success("OPERAÇÃO CONCLUÍDA COM SUCESSO.")
-
-                df = pd.DataFrame(leads)
-
-                # Exibição dos Resultados Estilizada
-                st.markdown(f"""
-                <div style="background: rgba(0, 243, 255, 0.05); border: 1px solid #00f3ff; padding: 15px; border-radius: 8px; margin: 20px 0; text-align: center;">
-                    <span style="font-size: 2rem; font-weight: bold; color: #fff;">{len(df)}</span>
-                    <br>
-                    <span style="font-family: 'JetBrains Mono'; color: #00f3ff; font-size: 0.8rem;">LEADS QUALIFICADOS ENCONTRADOS</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                cols_show = [c for c in ["nome", "municipio", "email", "telefone", "whatsapp", "lead_score", "url"] if c in df.columns]
-                st.dataframe(df[cols_show], use_container_width=True)
-
-                csv_buffer = io.StringIO()
-                df.to_csv(csv_buffer, index=False, sep=";")
-                csv_data = csv_buffer.getvalue()
-
-                # Centralizar botão de download
-                c_dl_1, c_dl_2, c_dl_3 = st.columns([1,1,1])
-                with c_dl_2:
-                    st.download_button(
-                        label="📥 EXPORTAR DADOS (CSV)",
-                        data=csv_data,
-                        file_name="leads_ommkt_extracted.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                    )
