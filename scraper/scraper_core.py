@@ -8,7 +8,11 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 import urllib3
 
-from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto, buscar_cnpj_google_serper
+from cnpj_detector import (
+    extrair_cnpj_site,
+    extrair_cnpj_texto,
+    buscar_cnpj_google_serper,  # mantido se você quiser usar depois
+)
 from receita_scraper import consultar_receita
 
 # Desativa avisos SSL chatos
@@ -20,9 +24,19 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 MAX_REQ_PER_SEC = 3
 
 DOMINIOS_BANIDOS = [
-    "guiapj.com", "cuiket.com", "descubraonline.com", "acheempresa.com",
-    "telelistas.net", "solutudo.com.br", "cnpj.biz", "br.biz", "guiamais.com",
-    "dnb.com", "yelp.com", "facebook.com", "linkedin.com"
+    "guiapj.com",
+    "cuiket.com",
+    "descubraonline.com",
+    "acheempresa.com",
+    "telelistas.net",
+    "solutudo.com.br",
+    "cnpj.biz",
+    "br.biz",
+    "guiamais.com",
+    "dnb.com",
+    "yelp.com",
+    "facebook.com",
+    "linkedin.com",
 ]
 
 EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
@@ -34,7 +48,6 @@ cache_cnpj = {}
 cache_dominios = {}
 cache_redes_sociais = {}
 cache_contatos = {}
-
 
 # ==========================================================
 # 🔍 BUSCA (DuckDuckGo)
@@ -49,7 +62,7 @@ def buscar_duckduckgo(termo, num_results=25):
                 {
                     "titulo": r.get("title", ""),
                     "link": r.get("href", ""),
-                    "descricao": r.get("body", "")
+                    "descricao": r.get("body", ""),
                 }
                 for r in results
             ]
@@ -107,7 +120,7 @@ def extrair_contatos_site(url):
                 link,
                 timeout=10,
                 verify=False,
-                headers={"User-Agent": "Mozilla/5.0"}
+                headers={"User-Agent": "Mozilla/5.0"},
             )
             if resp.status_code != 200:
                 continue
@@ -260,7 +273,9 @@ def processar_empresa(item, termo, config):
 
     # filtro de ICP
     texto_full = f"{nome} {desc} {termo}"
-    if not is_bom_lead(texto_full, include_keywords, exclude_keywords, capital, capital_minimo):
+    if not is_bom_lead(
+        texto_full, include_keywords, exclude_keywords, capital, capital_minimo
+    ):
         return None
 
     # --- Redes sociais + score ---
@@ -331,7 +346,7 @@ def run_scraper(config, progress_callback=None):
     for c in cidades:
         partes = c.split()
         if len(partes) >= 2:
-            municipio = " "..join(partes[:-1]).upper()
+            municipio = " ".join(partes[:-1]).upper()
             cidades_permitidas.append(municipio)
 
     # injeta no config para uso interno
@@ -349,13 +364,17 @@ def run_scraper(config, progress_callback=None):
     for cidade in cidades:
         for termo_base in termos:
             termo = f"{termo_base} {cidade}"
-            resultados = filtrar_resultados(buscar_duckduckgo(termo, num_results=25))
+            resultados = filtrar_resultados(
+                buscar_duckduckgo(termo, num_results=25)
+            )
             for item in resultados:
                 nome = item.get("titulo", "").strip()
                 if not nome or nome in empresas_vistas:
                     continue
                 empresas_vistas.add(nome)
-                tarefas.append(pool.submit(processar_empresa, item, termo, config))
+                tarefas.append(
+                    pool.submit(processar_empresa, item, termo, config)
+                )
 
     total = len(tarefas) or 1
     concluido = 0
