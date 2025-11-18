@@ -27,9 +27,9 @@ st.markdown(
     .main {
         background: transparent;
     }
-    /* Centralizar conteúdo principal */
+    /* Container central mais estreito */
     .block-container {
-        max-width: 1100px;
+        max-width: 950px;
         padding-top: 2.5rem;
         padding-bottom: 3rem;
     }
@@ -111,6 +111,7 @@ st.markdown(
         box-shadow:
             0 0 0 1px rgba(15, 23, 42, 0.85),
             0 18px 42px rgba(0, 0, 0, 0.75);
+        margin-top: 1.4rem;
     }
 
     .om-badge {
@@ -174,6 +175,20 @@ st.markdown(
         letter-spacing: 0.18em;
     }
 
+    /* Inputs / textareas com cara de produto */
+    textarea, .stTextInput>div>div>input, .stNumberInput input {
+        background-color: rgba(15, 23, 42, 0.9) !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(75, 85, 99, 0.9) !important;
+        color: #e5e7eb !important;
+        font-size: 0.9rem !important;
+    }
+    textarea:focus, .stTextInput>div>div>input:focus, .stNumberInput input:focus {
+        border-color: rgba(96, 165, 250, 0.9) !important;
+        box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.8) !important;
+        outline: none !important;
+    }
+
     /* Botão principal */
     .stButton>button {
         border-radius: 999px !important;
@@ -212,6 +227,11 @@ st.markdown(
     .stDownloadButton>button:hover {
         filter: brightness(1.06);
     }
+
+    /* Progress bar mais discreta */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #22c55e, #22d3ee) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -235,11 +255,12 @@ st.markdown(
 )
 
 # ----------------------------------------------------------
-# CARD CENTRAL (FORM)
+# TUDO CENTRALIZADO EM UMA COLUNA
 # ----------------------------------------------------------
-spacer_left, center_col, spacer_right = st.columns([0.1, 0.8, 0.1])
+_, center_col, _ = st.columns([0.1, 0.8, 0.1])
 
 with center_col:
+    # ------------------------ CARD FORM -------------------
     st.markdown('<div class="om-card">', unsafe_allow_html=True)
 
     st.markdown(
@@ -289,7 +310,6 @@ with center_col:
 
     st.write("")
 
-    # Linha de filtros
     col_capital, col_include, col_exclude = st.columns([0.7, 1.1, 1.1])
 
     with col_capital:
@@ -325,39 +345,32 @@ with center_col:
 
     st.markdown("</div>", unsafe_allow_html=True)  # fecha om-card
 
-st.write("")  # espaçamento
+    # --------------------- CARD RESULTADOS ----------------
+    st.markdown('<div class="om-card-secondary">', unsafe_allow_html=True)
 
-# ----------------------------------------------------------
-# CARD DE RESULTADOS / STATUS
-# ----------------------------------------------------------
-st.markdown('<div class="om-card-secondary">', unsafe_allow_html=True)
+    status_placeholder = st.empty()
+    progress_bar = st.progress(0)
+    resumo_placeholder = st.empty()
+    tabela_placeholder = st.empty()
+    download_placeholder = st.empty()
 
-status_placeholder = st.empty()
-progress_bar = st.progress(0)
-resumo_placeholder = st.empty()
-tabela_placeholder = st.empty()
-download_placeholder = st.empty()
-
-st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ----------------------------------------------------------
 # LÓGICA AO CLICAR NO BOTÃO
 # ----------------------------------------------------------
 if start_button:
-    # Limpa saída antiga
     status_placeholder.empty()
     resumo_placeholder.empty()
     tabela_placeholder.empty()
     download_placeholder.empty()
     progress_bar.progress(0)
 
-    # Normaliza entradas
     termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
     cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
     include_keywords = [k.strip() for k in include_raw.split(",") if k.strip()]
     exclude_keywords = [k.strip() for k in exclude_raw.split(",") if k.strip()]
 
-    # Validação
     if not termos:
         status_placeholder.error("Preencha pelo menos um termo de busca.")
     elif not cidades:
@@ -376,7 +389,6 @@ if start_button:
             unsafe_allow_html=True,
         )
 
-        # Callback de progresso
         def progress_callback(current, total, percent):
             try:
                 progress_bar.progress(percent)
@@ -418,11 +430,9 @@ if start_button:
                 unsafe_allow_html=True,
             )
 
-            # Tabela resumida
             cols_show = [c for c in ["nome", "municipio", "email", "telefone", "whatsapp", "lead_score", "url"] if c in df.columns]
             tabela_placeholder.dataframe(df[cols_show], use_container_width=True)
 
-            # CSV para download
             csv_buffer = io.StringIO()
             df.to_csv(csv_buffer, index=False, sep=";")
             csv_data = csv_buffer.getvalue()
