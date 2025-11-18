@@ -1,9 +1,11 @@
-# app.py — versão final sem Pinn, centralizado e refinado
-import time
-import pandas as pd
-import streamlit as st
-from scraper_core import run_scraper
+# ============================================================
+# app.py — Layout 100% centralizado estilo OM MKT (VERSÃO FINAL)
+# ============================================================
 
+import streamlit as st
+import pandas as pd
+import time
+from scraper_core import run_scraper
 
 # =========================================
 # CONFIG PÁGINA
@@ -14,333 +16,204 @@ st.set_page_config(
     layout="wide",
 )
 
-
 # =========================================
-# CSS FINAL REVISADO – SEM PINN E SEM FALHAS
+# CSS — versão OM MKT, centralizada, limpa e elegante
 # =========================================
-CUSTOM_CSS = """
+st.markdown("""
 <style>
 
 html, body, [class*="css"]  {
     font-family: "Inter", sans-serif;
 }
 
-/* ===== FUNDO EFEITO 3D SUAVE ===== */
+/* ===== FUNDO ===== */
 .stApp {
     background:
-        radial-gradient(circle at 25% 10%, rgba(76,150,250,0.18), transparent 55%),
-        radial-gradient(circle at 75% 90%, rgba(56,189,248,0.18), transparent 55%),
-        linear-gradient(145deg, #05070d, #0a0f1d 55%, #070a14 100%);
+        radial-gradient(circle at 10% 10%, rgba(76,150,250,0.16), transparent 60%),
+        radial-gradient(circle at 90% 90%, rgba(56,189,248,0.16), transparent 60%),
+        linear-gradient(145deg, #030712, #0A0F1D 55%, #05070D);
     color: #e6eefc;
 }
 
-
-/* ===== NAVBAR COMPACTA, SEM MARCA ===== */
-.navbar {
-    position: sticky;
-    top: 0;
-    z-index: 50;
-
-    padding: 10px 0px;
-    margin: -50px -75px 25px -75px;
-
-    backdrop-filter: blur(18px);
-    background: rgba(10,12,22,0.8);
-    border-bottom: 1px solid rgba(180,200,255,0.12);
+/* ===== HEADER CENTRAL ===== */
+.header {
+    text-align: center;
+    margin-top: 40px;
+    margin-bottom: 10px;
+}
+.header h1 {
+    font-size: 40px;
+    font-weight: 800;
+}
+.header p {
+    margin-top: -10px;
+    opacity: 0.85;
 }
 
-.nav-inner {
-    max-width: 1180px;
+/* ===== CARD CENTRAL ===== */
+.central-card {
+    max-width: 650px;
     margin: 0 auto;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.nav-title {
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: #e5e7eb;
-}
-
-
-/* ===== CARDS GLASS ===== */
-.glass-card {
-    background: rgba(15, 23, 42, 0.78);
+    background: rgba(15, 23, 42, 0.75);
     backdrop-filter: blur(14px);
     border-radius: 20px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
-    padding: 24px;
+    padding: 25px 25px 25px 25px;
+    border: 1px solid rgba(148,163,184,0.28);
+
     box-shadow:
-        0 0 0 1px rgba(15, 23, 42, 0.9),
-        0 18px 45px rgba(0, 0, 0, 0.8);
-    transition: 0.2s ease;
+        0px 4px 25px rgba(0,0,0,0.4),
+        inset 0px 0px 12px rgba(255,255,255,0.04);
 }
 
-.glass-card:hover {
-    transform: translateY(-3px);
+.central-card:hover {
     border-color: rgba(129, 230, 217, 0.45);
 }
 
-
-/* ===== DIVISOR ===== */
-.divider {
-    height: 1px;
-    margin: 20px 0;
-    background: linear-gradient(
-        90deg, transparent, rgba(76, 201, 240, 0.35), transparent
-    );
-}
-
-/* ===== BOTÃO ===== */
-.stButton > button {
-    display: block;
-    margin: 0 auto;
-    width: 65%;
-    padding: 14px 0;
-
-    border-radius: 999px;
-    border: none;
-
-    background: linear-gradient(120deg, #4cc9f0, #4361ee);
-    color: white;
-    font-size: 16px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-
-    box-shadow:
-        0 0 12px rgba(56, 189, 248, 0.45),
-        0 0 25px rgba(56, 189, 248, 0.25);
-
-    transition: 0.2s ease;
-}
-
-.stButton > button:hover {
-    transform: translateY(-3px);
-    box-shadow:
-        0 0 18px rgba(56, 189, 248, 0.6),
-        0 0 30px rgba(56, 189, 248, 0.45);
-}
-
-
-/* ===== INPUTS e TEXTAREAS ===== */
+/* ===== INPUTS ===== */
 textarea, input[type="text"], input[type="number"] {
     background: rgba(15, 23, 42, 0.9) !important;
-    border-radius: 14px !important;
+    border-radius: 12px !important;
     color: #e5e7eb !important;
     border: 1px solid rgba(148, 163, 184, 0.35) !important;
     padding: 10px !important;
 }
 
+/* ===== LABELS ===== */
+label, .stRadio label {
+    font-weight: 600 !important;
+    color: #dce3f1 !important;
+}
 
-/* ===== MÉTRICAS ===== */
+/* ===== BOTÃO CENTRAL ===== */
+.stButton > button {
+    display: block;
+    margin: 0 auto;
+    width: 90%;
+    padding: 14px 0;
+
+    border-radius: 999px;
+    border: none;
+
+    background: linear-gradient(90deg, #00E1FF, #00FFA2);
+    color: black;
+    font-size: 16px;
+    font-weight: 700;
+
+    transition: 0.15s ease;
+}
+.stButton > button:hover {
+    transform: translateY(-3px);
+}
+
+/* ===== DASHBOARD ===== */
 .metric-card {
     background: rgba(15, 23, 42, 0.9);
-    border-radius: 18px;
+    border-radius: 16px;
+    border: 1px solid rgba(148,163,184,0.35);
     padding: 16px 18px;
-    border: 1px solid rgba(148, 163, 184, 0.35);
 }
 
 .metric-label {
     color: #9ca3af;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.12em;
 }
 
 .metric-value {
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 700;
 }
 
-.metric-sub {
-    font-size: 11px;
-    color: #64748b;
-}
-
-
-/* ===== JARVIS LOADING ===== */
-.jarvis-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background:
-        radial-gradient(circle at 20% 0, rgba(56,189,248,0.05), transparent 55%),
-        radial-gradient(circle at 80% 100%, rgba(129,140,248,0.05), transparent 55%),
-        rgba(3,7,18,0.97);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-}
-
-.jarvis-core {
-    width: 90px;
-    height: 90px;
-    border-radius: 999px;
-    border: 3px solid rgba(148,163,184,0.35);
-    animation: rotate 3.2s linear infinite;
-}
-
-@keyframes rotate {
-   from { transform: rotate(0); }
-   to { transform: rotate(360deg); }
-}
-
-.jarvis-text {
-    margin-top: 18px;
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: #9ca3af;
+/* remover margem do topo */
+.block-container {
+    padding-top: 0 !important;
 }
 
 </style>
-"""
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 
-# LOADING HTML
-JARVIS_HTML = """
-<div class="jarvis-overlay">
-  <div class="jarvis-core"></div>
-  <div class="jarvis-text">Processando scraper...</div>
+# =========================================
+# HEADER SEM NADA LATERAL — 100% CENTRAL
+# =========================================
+st.markdown("""
+<div class="header">
+    <h1>Scraper Inteligente — ICP CEMIG</h1>
+    <p>Ferramenta avançada para captura de leads qualificados com filtros inteligentes.</p>
 </div>
-"""
+""", unsafe_allow_html=True)
 
 
 # =========================================
-# NAVBAR (CENTRALIZADA E LIMPA)
+# CARD CENTRAL — estilo OM MKT
 # =========================================
-st.markdown(
-    """
-<div class="navbar">
-  <div class="nav-inner">
-    <div class="nav-title">SCRAPER INTELIGENTE</div>
-  </div>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+st.markdown('<div class="central-card">', unsafe_allow_html=True)
 
+st.markdown("### Configuração do ICP")
 
-# =========================================
-# HEADER CENTRALIZADO
-# =========================================
-st.markdown("")
+tipo_cliente = st.radio("Tipo de cliente:", ["PF", "PJ"], index=1, horizontal=True)
 
-st.markdown(
-    """
-<div style='text-align:center; margin-top:20px;'>
-  <h1 style='font-weight:700;'>Scraper Inteligente — ICP CEMIG</h1>
-  <p style='max-width:700px;margin:auto;font-size:14px;color:#cbd5e1;'>
-     Ferramenta avançada para captura de leads qualificados com filtros inteligentes,
-     análise ICP e exportação em CSV.
-  </p>
-</div>
-""",
-    unsafe_allow_html=True,
-)
+min_consumo = st.slider("Consumo mínimo (R$):", 500, 20000, 1000, 500)
 
-st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+motivacoes = st.text_input("Motivações esperadas:", "redução de custo, economia de energia")
+motivacoes = [m.strip() for m in motivacoes.split(",")]
+
+st.markdown("### Termos de busca (um por linha)")
+termos_txt = st.text_area("", "empresa\ncomércio\nserviços gerais", height=100)
+termos_busca = [t.strip() for t in termos_txt.splitlines()]
+
+st.markdown("### Cidades (uma por linha)")
+cidades_txt = st.text_area("", "Belo Horizonte MG\nJuiz de Fora MG", height=90)
+cidades = [c.strip() for c in cidades_txt.splitlines()]
+
+executar = st.button("🚀 Rodar Scraper")
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================================
-# CAMPOS CENTRALIZADOS DEFINITIVAMENTE
-# =========================================
-cols = st.columns([0.15, 0.35, 0.35, 0.15])
-col_left = cols[1]
-col_right = cols[2]
-
-
-# ========== COLUNA ESQUERDA ==========
-with col_left:
-    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-    st.markdown("### 🔧 Configuração de Pesquisa")
-
-    tipo_cliente = st.radio("", ["PF", "PJ"], index=1, horizontal=True)
-    apenas_cemig = st.checkbox("Apenas área CEMIG", True)
-    min_consumo = st.slider("Consumo mínimo (R$)", 500, 20000, 1000, 500)
-
-    motivacoes = st.text_input("Motivações esperadas", "redução de custo, economia de energia")
-    motivacoes = [m.strip() for m in motivacoes.split(",")]
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# ========== COLUNA DIREITA ==========
-with col_right:
-    st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
-    st.markdown("### 🎯 Campos de Busca")
-
-    termos_txt = st.text_area("Termos de busca", "empresa\ncomércio\nserviços gerais")
-    termos_busca = [t.strip() for t in termos_txt.splitlines()]
-
-    cidades_txt = st.text_area("Cidades", "Belo Horizonte MG\nJuiz de Fora MG")
-    cidades = [c.strip() for c in cidades_txt.splitlines()]
-
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-
-    executar = st.button("🚀 Rodar Scraper")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-# =========================================
-# EXECUTAR SCRAPER
+# RUN SCRAPER
 # =========================================
 df = None
 
 if executar:
-
-    overlay = st.empty()
-    overlay.markdown(JARVIS_HTML, unsafe_allow_html=True)
-
-    time.sleep(0.4)
-
-    config = {
-        "tipo_cliente": tipo_cliente,
-        "apenas_cemig": apenas_cemig,
-        "min_consumo": min_consumo,
-        "motivacoes": motivacoes,
-        "termos_busca": termos_busca,
-        "cidades": cidades,
-    }
-
-    result = run_scraper(config)
-    overlay.empty()
-
-    df = pd.DataFrame(result)
+    with st.spinner("Processando..."):
+        config = {
+            "tipo_cliente": tipo_cliente,
+            "min_consumo": min_consumo,
+            "motivacoes": motivacoes,
+            "termos_busca": termos_busca,
+            "cidades": cidades,
+        }
+        result = run_scraper(config)
+        df = pd.DataFrame(result)
 
 
 # =========================================
-# DASHBOARD
+# DASHBOARD CENTRALIZADO
 # =========================================
-st.markdown("### 📊 Dashboard de Leads")
+st.markdown("<br><h3 style='text-align:center;'>📊 Dashboard de Leads</h3>", unsafe_allow_html=True)
 
 if df is None or df.empty:
     st.info("Rode o scraper para visualizar os resultados.")
 else:
-
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-label'>Leads</div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-label'>Total de Leads</div>", unsafe_allow_html=True)
         st.markdown(f"<div class='metric-value'>{len(df)}</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-        st.markdown("<div class='metric-label'>Cidades</div>", unsafe_allow_html=True)
-        if "cidade" in df:
+        st.markdown("<div class='metric-label'>Cidades Únicas</div>", unsafe_allow_html=True)
+        if "cidade" in df.columns:
             st.markdown(f"<div class='metric-value'>{df['cidade'].nunique()}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div class='metric-value'>{len(cidades)}</div>", unsafe_allow_html=True)
+            st.markdown("<div class='metric-value'>—</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("---")
-    st.dataframe(df, use_container_width=True, height=450)
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.dataframe(df, use_container_width=True)
