@@ -331,7 +331,7 @@ def run_scraper(config, progress_callback=None):
     for c in cidades:
         partes = c.split()
         if len(partes) >= 2:
-            municipio = " ".join(partes[:-1]).upper()
+            municipio = " "..join(partes[:-1]).upper()
             cidades_permitidas.append(municipio)
 
     # injeta no config para uso interno
@@ -378,6 +378,6 @@ def run_scraper(config, progress_callback=None):
     # filtra por score mínimo
     leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= 6]
 
-    # sem integração com Google Sheets na versão em nuvem:
-    # o app Streamlit recebe a lista de leads e oferece o download em CSV.
+    # Sem integração com Google Sheets: o app Streamlit recebe essa lista
+    # e oferece o download do CSV/Excel direto no navegador.
     return leads_quentes
