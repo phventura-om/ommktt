@@ -1,5 +1,5 @@
 # ============================================================
-# app.py — Layout 100% centralizado estilo OM MKT (VERSÃO FINAL)
+# app.py — Layout OM MKT + Animações Premium (Versão Final)
 # ============================================================
 
 import streamlit as st
@@ -7,39 +7,47 @@ import pandas as pd
 import time
 from scraper_core import run_scraper
 
-# =========================================
-# CONFIG PÁGINA
-# =========================================
 st.set_page_config(
     page_title="Scraper Inteligente — ICP CEMIG",
     page_icon="⚡",
     layout="wide",
 )
 
-# =========================================
-# CSS — versão OM MKT, centralizada, limpa e elegante
-# =========================================
+# ============================================================
+# CSS COMPLETO — animações, centralização, OM MKT e refinamento
+# ============================================================
 st.markdown("""
 <style>
 
-html, body, [class*="css"]  {
+html, body, [class*="css"] {
     font-family: "Inter", sans-serif;
 }
 
-/* ===== FUNDO ===== */
+/* ====== ANIMAÇÕES GLOBAIS ====== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeInSlow {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== FUNDO OM MKT ====== */
 .stApp {
+    animation: fadeIn 1.2s ease-out;
     background:
-        radial-gradient(circle at 10% 10%, rgba(76,150,250,0.16), transparent 60%),
-        radial-gradient(circle at 90% 90%, rgba(56,189,248,0.16), transparent 60%),
-        linear-gradient(145deg, #030712, #0A0F1D 55%, #05070D);
+        radial-gradient(circle at 5% 10%, rgba(0,180,255,0.15), transparent 60%),
+        radial-gradient(circle at 95% 90%, rgba(0,255,180,0.12), transparent 60%),
+        linear-gradient(145deg, #020814, #07101F 55%, #02050A 100%);
     color: #e6eefc;
 }
 
-/* ===== HEADER CENTRAL ===== */
+/* ====== HEADER ====== */
 .header {
     text-align: center;
-    margin-top: 40px;
-    margin-bottom: 10px;
+    margin-top: 45px;
+    animation: fadeInSlow 1.6s ease-out;
 }
 .header h1 {
     font-size: 40px;
@@ -47,49 +55,55 @@ html, body, [class*="css"]  {
 }
 .header p {
     margin-top: -10px;
-    opacity: 0.85;
+    font-size: 14px;
+    opacity: 0.82;
 }
 
-/* ===== CARD CENTRAL ===== */
+/* ====== CARD CENTRAL ====== */
 .central-card {
+    animation: fadeInSlow 1.4s ease-out;
     max-width: 650px;
-    margin: 0 auto;
-    background: rgba(15, 23, 42, 0.75);
-    backdrop-filter: blur(14px);
+    margin: 30px auto;
+    background: rgba(15,23,42,0.75);
+    backdrop-filter: blur(16px);
     border-radius: 20px;
-    padding: 25px 25px 25px 25px;
-    border: 1px solid rgba(148,163,184,0.28);
-
-    box-shadow:
-        0px 4px 25px rgba(0,0,0,0.4),
-        inset 0px 0px 12px rgba(255,255,255,0.04);
+    padding: 28px;
+    border: 1px solid rgba(148,163,184,0.25);
+    transition: 0.25s ease;
 }
-
 .central-card:hover {
-    border-color: rgba(129, 230, 217, 0.45);
+    transform: translateY(-4px);
+    border-color: rgba(0,255,200,0.45);
+    box-shadow: 0 0 35px rgba(0,255,200,0.14);
 }
 
-/* ===== INPUTS ===== */
-textarea, input[type="text"], input[type="number"] {
-    background: rgba(15, 23, 42, 0.9) !important;
-    border-radius: 12px !important;
-    color: #e5e7eb !important;
-    border: 1px solid rgba(148, 163, 184, 0.35) !important;
-    padding: 10px !important;
-}
-
-/* ===== LABELS ===== */
+/* ====== LABELS ====== */
 label, .stRadio label {
     font-weight: 600 !important;
     color: #dce3f1 !important;
 }
 
-/* ===== BOTÃO CENTRAL ===== */
+/* ====== INPUTS ====== */
+textarea, input[type="text"], input[type="number"] {
+    background: rgba(15,23,42,0.9) !important;
+    border-radius: 12px !important;
+    color: #e5e7eb !important;
+    border: 1px solid rgba(148,163,184,0.35) !important;
+    padding: 10px !important;
+    transition: 0.15s ease;
+}
+textarea:focus, input:focus {
+    border-color: rgba(0,255,200,0.4) !important;
+    box-shadow: 0 0 18px rgba(0,255,200,0.25) !important;
+}
+
+/* ====== BOTÃO ====== */
 .stButton > button {
+    animation: fadeIn 1.2s ease-out;
     display: block;
-    margin: 0 auto;
+    margin: 15px auto 0 auto;
     width: 90%;
-    padding: 14px 0;
+    padding: 15px 0;
 
     border-radius: 999px;
     border: none;
@@ -99,33 +113,34 @@ label, .stRadio label {
     font-size: 16px;
     font-weight: 700;
 
-    transition: 0.15s ease;
+    transition: 0.25s ease;
+    box-shadow: 0 0 18px rgba(0,255,200,0.3);
 }
 .stButton > button:hover {
     transform: translateY(-3px);
+    box-shadow: 0 0 30px rgba(0,255,200,0.45);
 }
 
-/* ===== DASHBOARD ===== */
+/* ====== MÉTRICAS ====== */
 .metric-card {
-    background: rgba(15, 23, 42, 0.9);
+    animation: fadeInSlow 1.4s ease-out;
+    background: rgba(15,23,42,0.9);
     border-radius: 16px;
+    padding: 18px;
     border: 1px solid rgba(148,163,184,0.35);
-    padding: 16px 18px;
 }
-
 .metric-label {
     color: #9ca3af;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.12em;
 }
-
 .metric-value {
     font-size: 28px;
     font-weight: 700;
 }
 
-/* remover margem do topo */
+/* removendo padding padrão */
 .block-container {
     padding-top: 0 !important;
 }
@@ -133,10 +148,9 @@ label, .stRadio label {
 </style>
 """, unsafe_allow_html=True)
 
-
-# =========================================
-# HEADER SEM NADA LATERAL — 100% CENTRAL
-# =========================================
+# ============================================================
+# HEADER — CENTRALIZADO
+# ============================================================
 st.markdown("""
 <div class="header">
     <h1>Scraper Inteligente — ICP CEMIG</h1>
@@ -144,10 +158,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-# =========================================
-# CARD CENTRAL — estilo OM MKT
-# =========================================
+# ============================================================
+# CARD PRINCIPAL — ESTILO OM MKT
+# ============================================================
 st.markdown('<div class="central-card">', unsafe_allow_html=True)
 
 st.markdown("### Configuração do ICP")
@@ -171,10 +184,9 @@ executar = st.button("🚀 Rodar Scraper")
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-
-# =========================================
-# RUN SCRAPER
-# =========================================
+# ============================================================
+# EXECUTAR SCRAPER
+# ============================================================
 df = None
 
 if executar:
@@ -189,10 +201,9 @@ if executar:
         result = run_scraper(config)
         df = pd.DataFrame(result)
 
-
-# =========================================
-# DASHBOARD CENTRALIZADO
-# =========================================
+# ============================================================
+# DASHBOARD
+# ============================================================
 st.markdown("<br><h3 style='text-align:center;'>📊 Dashboard de Leads</h3>", unsafe_allow_html=True)
 
 if df is None or df.empty:
