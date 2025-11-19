@@ -3,6 +3,9 @@ import time
 import streamlit as st
 import pandas as pd
 
+# 🔹 NOVO: importa a função do backend
+from scraper_core import run_scraper
+
 # ----------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ----------------------------------------------------------
@@ -219,7 +222,6 @@ st.markdown(
 # 3. INTERFACE (HTML WIDGETS + STREAMLIT INPUTS)
 # ----------------------------------------------------------
 
-# Início do Container Visual (HTML puro para o "Frame")
 st.markdown("""
 <div class="main-frame">
     <div class="frame-header">
@@ -241,8 +243,6 @@ st.markdown("""
     <div class="form-body">
 """, unsafe_allow_html=True)
 
-# --- INPUTS (Agora dentro do "form-body") ---
-
 # Termos de Busca
 termos_raw = st.text_area(
     "Termos de Busca (Target)",
@@ -259,7 +259,7 @@ cidades_raw = st.text_area(
     help="Cidade e UF obrigatórios."
 )
 
-# 🔹 NOVO: Consultas livres (cada linha é uma busca feita exatamente como está)
+# Consultas livres
 consultas_raw = st.text_area(
     "Consultas Livres (Opcional)",
     placeholder="Ex:\nclínica de estética São Paulo telefone\nhospital particular Belo Horizonte contato",
@@ -267,9 +267,8 @@ consultas_raw = st.text_area(
     help="Use quando quiser escrever a busca exatamente como será enviada. Uma consulta por linha."
 )
 
-st.write("")  # Espaçamento sutil
+st.write("")
 
-# Filtros Avançados (3 Colunas)
 c1, c2, c3 = st.columns(3)
 
 with c1:
@@ -295,7 +294,6 @@ with c3:
         help="Remove leads indesejados."
     )
 
-# 🔹 NOVO: Segunda linha de filtros avançados
 c4, c5, c6 = st.columns(3)
 
 with c4:
@@ -325,92 +323,95 @@ with c6:
         help="Quando marcado, remove micro e pequenas empresas (ME / EPP) da base."
     )
 
-# 🔹 NOVO: Controle enviar para Sheets
 enviar_sheets = st.checkbox(
     "Enviar automaticamente para Google Sheets",
     value=False,
     help="Quando integrado ao backend, ativa o envio automático dos leads para a planilha."
 )
 
-st.write("") # Espaçamento antes do botão
+st.write("")
 st.write("")
 
-# Botão de Ação
 start_button = st.button("⚡ Iniciar Varredura e Extração")
 
-# Fechamento das tags HTML do Container
 st.markdown("</div></div>", unsafe_allow_html=True)
 
-
 # ----------------------------------------------------------
-# 4. LÓGICA E RESULTADOS (Simulado)
+# 4. LÓGICA E RESULTADOS (AGORA USANDO O SCRAPER REAL)
 # ----------------------------------------------------------
 
 if start_button:
-    # Validação simples (mantida)
-    if not termos_raw or not cidades_raw:
-        st.error("⚠️ Erro de Input: Defina pelo menos um Termo e uma Cidade.")
+    # regra: precisa de pelo menos Termos OU Consultas, e pelo menos uma cidade
+    if (not termos_raw and not consultas_raw) or not cidades_raw:
+        st.error("⚠️ Erro de Input: Defina Termos ou Consultas Livres e pelo menos uma Cidade.")
     else:
-        # 🔹 Aqui você já tem todas as variáveis prontas para montar o config do scraper:
-        # termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
-        # cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
-        # consultas = [q.strip() for q in consultas_raw.splitlines() if q.strip()]
-        # include_keywords = [w.strip() for w in include_raw.split(",") if w.strip()]
-        # exclude_keywords = [w.strip() for w in exclude_raw.split(",") if w.strip()]
-        #
-        # config = {
-        #     "termos": termos,
-        #     "cidades": cidades,
-        #     "consultas": consultas,
-        #     "resultados_por_consulta": int(resultados_por_consulta),
-        #     "capital_minimo": int(capital_minimo),
-        #     "include_keywords": include_keywords,
-        #     "exclude_keywords": exclude_keywords,
-        #     "filtrar_me_epp": filtrar_me_epp,
-        #     "score_minimo": int(score_minimo),
-        #     "enviar_sheets": enviar_sheets,
-        # }
-        #
-        # leads = run_scraper(config)
+        # parsing dos campos
+        termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
+        cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
+        consultas = [q.strip() for q in consultas_raw.splitlines() if q.strip()]
+        include_keywords = [w.strip() for w in include_raw.split(",") if w.strip()]
+        exclude_keywords = [w.strip() for w in exclude_raw.split(",") if w.strip()]
 
-        # Placeholder para loading
+        config = {
+            "termos": termos,
+            "cidades": cidades,
+            "consultas": consultas,
+            "resultados_por_consulta": int(resultados_por_consulta),
+            "capital_minimo": int(capital_minimo),
+            "include_keywords": include_keywords,
+            "exclude_keywords": exclude_keywords,
+            "filtrar_me_epp": filtrar_me_epp,
+            "score_minimo": int(score_minimo),
+            "enviar_sheets": enviar_sheets,
+        }
+
+        # status + chamada real do scraper
         with st.status("Processando extração de dados...", expanded=True) as status:
             st.write("Conectando aos servidores de busca...")
-            time.sleep(1)
-            st.write("Filtrando por Capital Social e Keywords...")
-            time.sleep(1.5)
-            st.write("Enriquecendo contatos...")
             time.sleep(0.5)
+            st.write("Executando varredura e enriquecimento de leads...")
+            leads = run_scraper(config)
             status.update(label="Processo Concluído!", state="complete", expanded=False)
 
-        # Mock de dados (Substitua pela sua chamada 'run_scraper')
-        data = {
-            "Empresa": ["Indústria Alpha Ltda", "Beta Tech S.A.", "Gamma Solutions"],
-            "Cidade": ["São Paulo SP", "São Paulo SP", "Belo Horizonte MG"],
-            "Telefone": ["(11) 99999-9999", "(11) 3030-3030", "(31) 98888-8888"],
-            "Score": [98, 95, 82]
-        }
-        df = pd.DataFrame(data)
+        if not leads:
+            st.warning("Nenhum lead encontrado com os filtros atuais. Tente relaxar os filtros ou ampliar as consultas.")
+        else:
+            df = pd.DataFrame(leads)
 
-        # Exibição dos Resultados (Card "Caro")
-        st.markdown(f"""
-        <div class="result-metric-card">
-            <div style="font-family: 'Inter'; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase;">Leads Encontrados</div>
-            <div style="font-family: 'Inter'; font-size: 3rem; font-weight: 800; color: #fff; line-height: 1.2;">{len(df)}</div>
-            <div style="font-family: 'Inter'; font-size: 0.8rem; color: #00f3ff;">Prontos para exportação</div>
-        </div>
-        """, unsafe_allow_html=True)
+            # escolhe colunas principais para exibir
+            cols_preferidas = ["nome", "municipio", "telefone", "whatsapp", "email", "lead_score"]
+            cols_existentes = [c for c in cols_preferidas if c in df.columns]
 
-        st.dataframe(df, use_container_width=True)
+            if cols_existentes:
+                df_view = df[cols_existentes].copy()
+                df_view = df_view.rename(columns={
+                    "nome": "Empresa",
+                    "municipio": "Cidade",
+                    "telefone": "Telefone",
+                    "whatsapp": "WhatsApp",
+                    "email": "E-mail",
+                    "lead_score": "Score"
+                })
+            else:
+                df_view = df
 
-        # Botão Download (Centralizado via colunas)
-        c_dl_1, c_dl_2, c_dl_3 = st.columns([1, 2, 1])
-        with c_dl_2:
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Baixar CSV Completo",
-                data=csv,
-                file_name="leads_export.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+            st.markdown(f"""
+            <div class="result-metric-card">
+                <div style="font-family: 'Inter'; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase;">Leads Encontrados</div>
+                <div style="font-family: 'Inter'; font-size: 3rem; font-weight: 800; color: #fff; line-height: 1.2;">{len(df_view)}</div>
+                <div style="font-family: 'Inter'; font-size: 0.8rem; color: #00f3ff;">Prontos para exportação</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.dataframe(df_view, use_container_width=True)
+
+            c_dl_1, c_dl_2, c_dl_3 = st.columns([1, 2, 1])
+            with c_dl_2:
+                csv = df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Baixar CSV Completo",
+                    data=csv,
+                    file_name="leads_export.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
