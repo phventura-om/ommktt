@@ -259,7 +259,15 @@ cidades_raw = st.text_area(
     help="Cidade e UF obrigatórios."
 )
 
-st.write("") # Espaçamento sutil
+# 🔹 NOVO: Consultas livres (cada linha é uma busca feita exatamente como está)
+consultas_raw = st.text_area(
+    "Consultas Livres (Opcional)",
+    placeholder="Ex:\nclínica de estética São Paulo telefone\nhospital particular Belo Horizonte contato",
+    height=120,
+    help="Use quando quiser escrever a busca exatamente como será enviada. Uma consulta por linha."
+)
+
+st.write("")  # Espaçamento sutil
 
 # Filtros Avançados (3 Colunas)
 c1, c2, c3 = st.columns(3)
@@ -287,6 +295,43 @@ with c3:
         help="Remove leads indesejados."
     )
 
+# 🔹 NOVO: Segunda linha de filtros avançados
+c4, c5, c6 = st.columns(3)
+
+with c4:
+    resultados_por_consulta = st.number_input(
+        "Resultados por Consulta",
+        min_value=5,
+        max_value=100,
+        value=25,
+        step=5,
+        help="Quantos resultados o motor deve puxar por consulta de busca."
+    )
+
+with c5:
+    score_minimo = st.number_input(
+        "Score Mínimo do Lead",
+        min_value=0,
+        max_value=20,
+        value=0,
+        step=1,
+        help="Corte mínimo do lead_score. 0 = sem corte por score."
+    )
+
+with c6:
+    filtrar_me_epp = st.checkbox(
+        "Excluir ME / EPP",
+        value=False,
+        help="Quando marcado, remove micro e pequenas empresas (ME / EPP) da base."
+    )
+
+# 🔹 NOVO: Controle enviar para Sheets
+enviar_sheets = st.checkbox(
+    "Enviar automaticamente para Google Sheets",
+    value=False,
+    help="Quando integrado ao backend, ativa o envio automático dos leads para a planilha."
+)
+
 st.write("") # Espaçamento antes do botão
 st.write("")
 
@@ -302,10 +347,32 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 # ----------------------------------------------------------
 
 if start_button:
-    # Validação simples
+    # Validação simples (mantida)
     if not termos_raw or not cidades_raw:
         st.error("⚠️ Erro de Input: Defina pelo menos um Termo e uma Cidade.")
     else:
+        # 🔹 Aqui você já tem todas as variáveis prontas para montar o config do scraper:
+        # termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
+        # cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
+        # consultas = [q.strip() for q in consultas_raw.splitlines() if q.strip()]
+        # include_keywords = [w.strip() for w in include_raw.split(",") if w.strip()]
+        # exclude_keywords = [w.strip() for w in exclude_raw.split(",") if w.strip()]
+        #
+        # config = {
+        #     "termos": termos,
+        #     "cidades": cidades,
+        #     "consultas": consultas,
+        #     "resultados_por_consulta": int(resultados_por_consulta),
+        #     "capital_minimo": int(capital_minimo),
+        #     "include_keywords": include_keywords,
+        #     "exclude_keywords": exclude_keywords,
+        #     "filtrar_me_epp": filtrar_me_epp,
+        #     "score_minimo": int(score_minimo),
+        #     "enviar_sheets": enviar_sheets,
+        # }
+        #
+        # leads = run_scraper(config)
+
         # Placeholder para loading
         with st.status("Processando extração de dados...", expanded=True) as status:
             st.write("Conectando aos servidores de busca...")
