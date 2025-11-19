@@ -1,4 +1,3 @@
-# scraper_core.py
 import csv
 import time
 import re
@@ -8,12 +7,9 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 import urllib3
 
-from cnpj_detector import (
-    extrair_cnpj_site,
-    extrair_cnpj_texto,
-    buscar_cnpj_google_serper,  # mantido se você quiser usar depois
-)
+from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto
 from receita_scraper import consultar_receita
+from organizador_sheets import atualizar_planilha_completa
 
 # Desativa avisos SSL chatos
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -24,19 +20,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 MAX_REQ_PER_SEC = 3
 
 DOMINIOS_BANIDOS = [
-    "guiapj.com",
-    "cuiket.com",
-    "descubraonline.com",
-    "acheempresa.com",
-    "telelistas.net",
-    "solutudo.com.br",
-    "cnpj.biz",
-    "br.biz",
-    "guiamais.com",
-    "dnb.com",
-    "yelp.com",
-    "facebook.com",
-    "linkedin.com",
+    "guiapj.com", "cuiket.com", "descubraonline.com", "acheempresa.com",
+    "telelistas.net", "solutudo.com.br", "cnpj.biz", "br.biz", "guiamais.com",
+    "dnb.com", "yelp.com", "facebook.com", "linkedin.com"
 ]
 
 EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
@@ -48,6 +34,7 @@ cache_cnpj = {}
 cache_dominios = {}
 cache_redes_sociais = {}
 cache_contatos = {}
+
 
 # ==========================================================
 # 🔍 BUSCA (DuckDuckGo)
@@ -62,7 +49,7 @@ def buscar_duckduckgo(termo, num_results=25):
                 {
                     "titulo": r.get("title", ""),
                     "link": r.get("href", ""),
-                    "descricao": r.get("body", ""),
+                    "descricao": r.get("body", "")
                 }
                 for r in results
             ]
@@ -120,7 +107,7 @@ def extrair_contatos_site(url):
                 link,
                 timeout=10,
                 verify=False,
-                headers={"User-Agent": "Mozilla/5.0"},
+                headers={"User-Agent": "Mozilla/5.0"}
             )
             if resp.status_code != 200:
                 continue
@@ -213,6 +200,7 @@ def processar_empresa(item, termo, config):
     exclude_keywords = config["exclude_keywords"]
     capital_minimo = config["capital_minimo"]
     cidades_permitidas = config["cidades_permitidas"]
+    filtrar_me_epp = config.get("filtrar_me_epp", False)
 
     nome = item.get("titulo", "").strip()
     link = item.get("link", "")
@@ -243,8 +231,9 @@ def processar_empresa(item, termo, config):
             except Exception:
                 receita = None
 
-    # --- Contatos ---
+    # --- Contatos (AGORA OBRIGATÓRIO) ---
     contatos = extrair_contatos_site(link)
+    # se não tem email, telefone ou WhatsApp → descarta o lead
     if not any(contatos.values()):
         return None
 
@@ -263,38 +252,29 @@ def processar_empresa(item, termo, config):
         capital_str = str(receita.get("capital_social") or "")
         capital = float(re.sub(r"[^\d]", "", capital_str) or 0)
 
-    # descarta ME/EPP
-    if porte in ["ME", "MICRO EMPRESA", "EPP", "EMPRESA DE PEQUENO PORTE"]:
+    # filtro opcional para excluir ME/EPP
+    if filtrar_me_epp and porte in ["ME", "MICRO EMPRESA", "EPP", "EMPRESA DE PEQUENO PORTE"]:
         return None
 
-    # filtra município
+    # filtra município (se configurado)
     if cidades_permitidas and municipio and municipio not in cidades_permitidas:
         return None
 
     # filtro de ICP
     texto_full = f"{nome} {desc} {termo}"
-    if not is_bom_lead(
-        texto_full, include_keywords, exclude_keywords, capital, capital_minimo
-    ):
+    if not is_bom_lead(texto_full, include_keywords, exclude_keywords, capital, capital_minimo):
         return None
 
     # --- Redes sociais + score ---
     redes = buscar_redes_sociais(nome)
     score = 0
-    if contatos.get("email"):
-        score += 2
-    if contatos.get("telefone"):
-        score += 2
-    if contatos.get("whatsapp"):
-        score += 3
-    if redes.get("instagram"):
-        score += 1
-    if redes.get("facebook"):
-        score += 1
-    if redes.get("linkedin"):
-        score += 1
-    if receita:
-        score += 1
+    if contatos.get("email"): score += 2
+    if contatos.get("telefone"): score += 2
+    if contatos.get("whatsapp"): score += 3
+    if redes.get("instagram"): score += 1
+    if redes.get("facebook"): score += 1
+    if redes.get("linkedin"): score += 1
+    if receita: score += 1
 
     dados = {
         "nome": nome,
@@ -323,23 +303,33 @@ def run_scraper(config, progress_callback=None):
     """
     Roda a prospecção com base em um dict de configuração.
 
-    config espera:
-      - termos: list[str]
-      - cidades: list[str] (ex.: 'Belo Horizonte MG')
-      - capital_minimo: int
+    config:
+      - termos: list[str]               → termos base (opcional)
+      - cidades: list[str]              → ex.: 'Belo Horizonte MG' (opcional)
+      - consultas: list[str]            → buscas livres, já prontas (opcional)
+      - resultados_por_consulta: int    → padrão 25
+      - capital_minimo: int             → 0 para ignorar filtro
       - include_keywords: list[str]
       - exclude_keywords: list[str]
+      - filtrar_me_epp: bool            → se True, exclui ME/EPP
+      - score_minimo: int               → mínimo de lead_score (padrão 0)
+      - enviar_sheets: bool             → se True, atualiza planilha
 
-    progress_callback(opcional): função chamada como
-      progress_callback(current, total, percent)
-    para você atualizar barra de progresso no front.
+      ⚠ Importante: o código SEMPRE exige ao menos um contato
+        (email ou telefone ou WhatsApp) para salvar o lead.
     """
 
-    termos = config.get("termos", [])
-    cidades = config.get("cidades", [])
+    termos = config.get("termos", []) or []
+    cidades = config.get("cidades", []) or []
+    consultas_customizadas = config.get("consultas", []) or []
+    resultados_por_consulta = int(config.get("resultados_por_consulta", 25))
+
     capital_minimo = int(config.get("capital_minimo", 0))
-    include_keywords = config.get("include_keywords", [])
-    exclude_keywords = config.get("exclude_keywords", [])
+    include_keywords = config.get("include_keywords", []) or []
+    exclude_keywords = config.get("exclude_keywords", []) or []
+    enviar_sheets = bool(config.get("enviar_sheets", True))
+    filtrar_me_epp = bool(config.get("filtrar_me_epp", False))
+    score_minimo = int(config.get("score_minimo", 0))
 
     # calcula municípios permitidos a partir das cidades
     cidades_permitidas = []
@@ -354,27 +344,42 @@ def run_scraper(config, progress_callback=None):
     config["include_keywords"] = include_keywords
     config["exclude_keywords"] = exclude_keywords
     config["cidades_permitidas"] = cidades_permitidas
+    config["filtrar_me_epp"] = filtrar_me_epp
 
     leads_quentes = []
     tarefas = []
     empresas_vistas = set()
     pool = ThreadPoolExecutor(max_workers=20)
 
+    # monta lista de consultas de busca (mais genérico)
+    consultas = []
+
+    # 1) consultas livres, já prontas
+    consultas.extend(consultas_customizadas)
+
+    # 2) combinações termo + cidade
+    if termos and cidades:
+        for cidade in cidades:
+            for termo_base in termos:
+                consultas.append(f"{termo_base} {cidade}")
+    # 3) só termos
+    elif termos:
+        consultas.extend(termos)
+    # 4) só cidades
+    elif cidades:
+        consultas.extend(cidades)
+
     # monta tarefas
-    for cidade in cidades:
-        for termo_base in termos:
-            termo = f"{termo_base} {cidade}"
-            resultados = filtrar_resultados(
-                buscar_duckduckgo(termo, num_results=25)
-            )
-            for item in resultados:
-                nome = item.get("titulo", "").strip()
-                if not nome or nome in empresas_vistas:
-                    continue
-                empresas_vistas.add(nome)
-                tarefas.append(
-                    pool.submit(processar_empresa, item, termo, config)
-                )
+    for termo in consultas:
+        resultados = filtrar_resultados(
+            buscar_duckduckgo(termo, num_results=resultados_por_consulta)
+        )
+        for item in resultados:
+            nome = item.get("titulo", "").strip()
+            if not nome or nome in empresas_vistas:
+                continue
+            empresas_vistas.add(nome)
+            tarefas.append(pool.submit(processar_empresa, item, termo, config))
 
     total = len(tarefas) or 1
     concluido = 0
@@ -394,9 +399,19 @@ def run_scraper(config, progress_callback=None):
             pct = int(concluido / total * 100)
             progress_callback(concluido, total, pct)
 
-    # filtra por score mínimo
-    leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= 6]
+    # filtra por score mínimo (padrão 0 para não podar nada)
+    leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= score_minimo]
 
-    # Sem integração com Google Sheets: o app Streamlit recebe essa lista
-    # e oferece o download do CSV/Excel direto no navegador.
+    # atualiza planilha no Google Sheets (se habilitado)
+    if enviar_sheets and leads_quentes:
+        atualizar_planilha_completa(
+            cred_path="credenciais.json",
+            spreadsheet_name="empresas_leads_quentes",
+            aba_dados="leads",
+            aba_cidade="resumo_cidade",
+            aba_segmento="resumo_segmento",
+            aba_top="top_clientes",
+            base_final=leads_quentes,
+        )
+
     return leads_quentes
