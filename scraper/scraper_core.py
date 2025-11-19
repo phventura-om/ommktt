@@ -59,8 +59,11 @@ def buscar_duckduckgo(termo, num_results=25):
 
 
 def filtrar_resultados(resultados):
-    """Remove sites genéricos e domínios repetidos."""
-    vistos = set()
+    """
+    Remove domínios banidos e deduplica por LINK (não mais por domínio).
+    Isso aumenta bastante o volume de candidatos.
+    """
+    vistos_links = set()
     filtrados = []
     for r in resultados:
         link = r.get("link", "")
@@ -71,12 +74,15 @@ def filtrar_resultados(resultados):
         except Exception:
             continue
 
+        # remove portais/diretórios genéricos
         if any(d in dominio for d in DOMINIOS_BANIDOS):
             continue
-        if dominio in vistos:
+
+        # agora só deduplica por link exato
+        if link in vistos_links:
             continue
 
-        vistos.add(dominio)
+        vistos_links.add(link)
         filtrados.append(r)
 
     return filtrados
@@ -99,7 +105,17 @@ def extrair_contatos_site(url):
     if dominio and dominio in cache_contatos:
         return cache_contatos[dominio]
 
-    caminhos_contato = ["", "/contato", "/fale-conosco", "/sobre", "/quem-somos"]
+    caminhos_contato = [
+        "",
+        "/contato",
+        "/contatos",
+        "/fale-conosco",
+        "/faleconosco",
+        "/atendimento",
+        "/agendamento",
+        "/quem-somos",
+        "/sobre",
+    ]
     for caminho in caminhos_contato:
         link = url.rstrip("/") + caminho
         try:
@@ -231,9 +247,8 @@ def processar_empresa(item, termo, config):
             except Exception:
                 receita = None
 
-    # --- Contatos (AGORA OBRIGATÓRIO) ---
+    # --- Contatos (OBRIGATÓRIO) ---
     contatos = extrair_contatos_site(link)
-    # se não tem email, telefone ou WhatsApp → descarta o lead
     if not any(contatos.values()):
         return None
 
@@ -256,9 +271,8 @@ def processar_empresa(item, termo, config):
     if filtrar_me_epp and porte in ["ME", "MICRO EMPRESA", "EPP", "EMPRESA DE PEQUENO PORTE"]:
         return None
 
-    # filtra município (se configurado)
-    if cidades_permitidas and municipio and municipio not in cidades_permitidas:
-        return None
+    # ⚠️ MUNICÍPIO NÃO FILTRA MAIS
+    # (o geográfico já vem da query de busca; isso aqui estava cortando muito lead)
 
     # filtro de ICP
     texto_full = f"{nome} {desc} {termo}"
@@ -304,19 +318,16 @@ def run_scraper(config, progress_callback=None):
     Roda a prospecção com base em um dict de configuração.
 
     config:
-      - termos: list[str]               → termos base (opcional)
-      - cidades: list[str]              → ex.: 'Belo Horizonte MG' (opcional)
-      - consultas: list[str]            → buscas livres, já prontas (opcional)
-      - resultados_por_consulta: int    → padrão 25
-      - capital_minimo: int             → 0 para ignorar filtro
+      - termos: list[str]
+      - cidades: list[str]
+      - consultas: list[str]
+      - resultados_por_consulta: int
+      - capital_minimo: int
       - include_keywords: list[str]
       - exclude_keywords: list[str]
-      - filtrar_me_epp: bool            → se True, exclui ME/EPP
-      - score_minimo: int               → mínimo de lead_score (padrão 0)
-      - enviar_sheets: bool             → se True, atualiza planilha
-
-      ⚠ Importante: o código SEMPRE exige ao menos um contato
-        (email ou telefone ou WhatsApp) para salvar o lead.
+      - filtrar_me_epp: bool
+      - score_minimo: int
+      - enviar_sheets: bool
     """
 
     termos = config.get("termos", []) or []
@@ -332,6 +343,7 @@ def run_scraper(config, progress_callback=None):
     score_minimo = int(config.get("score_minimo", 0))
 
     # calcula municípios permitidos a partir das cidades
+    # (mantemos no config só pra log/compat, mas não filtramos mais por isso)
     cidades_permitidas = []
     for c in cidades:
         partes = c.split()
@@ -339,7 +351,6 @@ def run_scraper(config, progress_callback=None):
             municipio = " ".join(partes[:-1]).upper()
             cidades_permitidas.append(municipio)
 
-    # injeta no config para uso interno
     config["capital_minimo"] = capital_minimo
     config["include_keywords"] = include_keywords
     config["exclude_keywords"] = exclude_keywords
@@ -351,25 +362,19 @@ def run_scraper(config, progress_callback=None):
     empresas_vistas = set()
     pool = ThreadPoolExecutor(max_workers=20)
 
-    # monta lista de consultas de busca (mais genérico)
+    # consultas combinadas
     consultas = []
-
-    # 1) consultas livres, já prontas
     consultas.extend(consultas_customizadas)
 
-    # 2) combinações termo + cidade
     if termos and cidades:
         for cidade in cidades:
             for termo_base in termos:
                 consultas.append(f"{termo_base} {cidade}")
-    # 3) só termos
     elif termos:
         consultas.extend(termos)
-    # 4) só cidades
     elif cidades:
         consultas.extend(cidades)
 
-    # monta tarefas
     for termo in consultas:
         resultados = filtrar_resultados(
             buscar_duckduckgo(termo, num_results=resultados_por_consulta)
@@ -399,10 +404,9 @@ def run_scraper(config, progress_callback=None):
             pct = int(concluido / total * 100)
             progress_callback(concluido, total, pct)
 
-    # filtra por score mínimo (padrão 0 para não podar nada)
+    # filtro por score mínimo
     leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= score_minimo]
 
-    # atualiza planilha no Google Sheets (se habilitado)
     if enviar_sheets and leads_quentes:
         atualizar_planilha_completa(
             cred_path="credenciais.json",
