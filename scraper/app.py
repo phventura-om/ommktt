@@ -1,417 +1,421 @@
-import io
+import csv
 import time
-import streamlit as st
-import pandas as pd
+import re
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from bs4 import BeautifulSoup
+from ddgs import DDGS
+import urllib3
 
-# 🔹 NOVO: importa a função do backend
-from scraper_core import run_scraper
+from cnpj_detector import extrair_cnpj_site, extrair_cnpj_texto
+from receita_scraper import consultar_receita
+from organizador_sheets import atualizar_planilha_completa
 
-# ----------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA
-# ----------------------------------------------------------
-st.set_page_config(
-    page_title="OM MKT · Data Engine",
-    layout="wide",
-    page_icon="💠",
-    initial_sidebar_state="collapsed"
-)
+# Desativa avisos SSL chatos
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ----------------------------------------------------------
-# 2. ESTILO PREMIUM (CSS)
-# ----------------------------------------------------------
-st.markdown(
+# ==========================================================
+# ⚙️ CONFIGURAÇÕES GERAIS
+# ==========================================================
+MAX_REQ_PER_SEC = 3
+
+DOMINIOS_BANIDOS = [
+    "guiapj.com", "cuiket.com", "descubraonline.com", "acheempresa.com",
+    "telelistas.net", "solutudo.com.br", "cnpj.biz", "br.biz", "guiamais.com",
+    "dnb.com", "yelp.com", "facebook.com", "linkedin.com"
+]
+
+EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+PHONE_REGEX = r"\(?\d{2}\)?\s?\d{4,5}-?\d{4}"
+WHATS_REGEX = r"(?:(?:\+55\s?)?\(?\d{2}\)?\s?)?(?:9\d{4}|[2-9]\d{3})-?\d{4}"
+
+# caches simples em memória
+cache_cnpj = {}
+cache_dominios = {}
+cache_redes_sociais = {}
+cache_contatos = {}
+
+
+# ==========================================================
+# 🔍 BUSCA (DuckDuckGo)
+# ==========================================================
+def buscar_duckduckgo(termo, num_results=25):
+    """Busca gratuita via DuckDuckGo."""
+    time.sleep(1 / MAX_REQ_PER_SEC)
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(termo, max_results=num_results))
+            return [
+                {
+                    "titulo": r.get("title", ""),
+                    "link": r.get("href", ""),
+                    "descricao": r.get("body", "")
+                }
+                for r in results
+            ]
+    except Exception as e:
+        print(f"⚠ Erro DuckDuckGo: {e}")
+        return []
+
+
+def filtrar_resultados(resultados):
     """
-    <style>
-    /* Importando fontes Premium */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap');
+    Remove domínios banidos e deduplica por LINK (não mais por domínio).
+    Isso aumenta bastante o volume de candidatos.
+    """
+    vistos_links = set()
+    filtrados = []
+    for r in resultados:
+        link = r.get("link", "")
+        if not link:
+            continue
+        try:
+            dominio = link.split("/")[2]
+        except Exception:
+            continue
 
-    :root {
-        --primary-glow: #00f3ff;   /* Ciano Neon */
-        --secondary-glow: #7000ff; /* Roxo Profundo */
-        --bg-dark: #050505;        /* Quase Preto */
-        --card-bg: #0e1116;        /* Cinza Chumbo */
-        --border-color: #1f2937;   /* Borda sutil */
+        # remove portais/diretórios genéricos
+        if any(d in dominio for d in DOMINIOS_BANIDOS):
+            continue
+
+        # agora só deduplica por link exato
+        if link in vistos_links:
+            continue
+
+        vistos_links.add(link)
+        filtrados.append(r)
+
+    return filtrados
+
+
+# ==========================================================
+# 📞 EXTRAÇÃO DE CONTATOS
+# ==========================================================
+def extrair_contatos_site(url):
+    """Busca e-mail, telefone e WhatsApp em algumas páginas padrão do site."""
+    contatos = {"email": "", "telefone": "", "whatsapp": ""}
+    if not url:
+        return contatos
+
+    try:
+        dominio = url.split("/")[2]
+    except Exception:
+        dominio = ""
+
+    if dominio and dominio in cache_contatos:
+        return cache_contatos[dominio]
+
+    caminhos_contato = [
+        "",
+        "/contato",
+        "/contatos",
+        "/fale-conosco",
+        "/faleconosco",
+        "/atendimento",
+        "/agendamento",
+        "/quem-somos",
+        "/sobre",
+    ]
+    for caminho in caminhos_contato:
+        link = url.rstrip("/") + caminho
+        try:
+            resp = requests.get(
+                link,
+                timeout=10,
+                verify=False,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            if resp.status_code != 200:
+                continue
+
+            text = BeautifulSoup(resp.text, "html.parser").get_text(" ")
+
+            if not contatos["email"]:
+                emails = re.findall(EMAIL_REGEX, text)
+                if emails:
+                    contatos["email"] = emails[0]
+
+            if not contatos["telefone"]:
+                tels = re.findall(PHONE_REGEX, text)
+                if tels:
+                    contatos["telefone"] = tels[0]
+
+            if not contatos["whatsapp"]:
+                whats = re.findall(WHATS_REGEX, text)
+                if whats:
+                    contatos["whatsapp"] = whats[0]
+
+            if any(contatos.values()):
+                break
+
+        except Exception:
+            continue
+
+    if dominio:
+        cache_contatos[dominio] = contatos
+    return contatos
+
+
+# ==========================================================
+# 🌐 REDES SOCIAIS
+# ==========================================================
+def buscar_redes_sociais(nome):
+    if nome in cache_redes_sociais:
+        return cache_redes_sociais[nome]
+
+    termo = f"{nome} instagram facebook linkedin"
+    resultados = buscar_duckduckgo(termo)
+    redes = {"instagram": "", "facebook": "", "linkedin": ""}
+
+    for r in resultados:
+        link = r.get("link", "")
+        if "instagram.com" in link and not redes["instagram"]:
+            redes["instagram"] = link
+        elif "facebook.com" in link and not redes["facebook"]:
+            redes["facebook"] = link
+        elif "linkedin.com" in link and not redes["linkedin"]:
+            redes["linkedin"] = link
+
+    cache_redes_sociais[nome] = redes
+    return redes
+
+
+# ==========================================================
+# 🎯 FILTRO GENÉRICO DE ICP
+# ==========================================================
+def is_bom_lead(texto, include_keywords, exclude_keywords, capital, capital_minimo):
+    """
+    Aplica filtro textual + capital mínimo.
+    - include_keywords: se não estiver vazio → exige pelo menos uma palavra presente
+    - exclude_keywords: se palavra aparecer → exclui
+    """
+    texto = texto.lower()
+
+    # palavras de exclusão
+    for p in exclude_keywords or []:
+        if p.lower() in texto:
+            return False
+
+    # palavras de inclusão
+    if include_keywords:
+        if not any(p.lower() in texto for p in include_keywords):
+            return False
+
+    # capital mínimo
+    if capital_minimo and capital and capital < capital_minimo:
+        return False
+
+    return True
+
+
+# ==========================================================
+# 🧩 PROCESSAMENTO DE UMA EMPRESA
+# ==========================================================
+def processar_empresa(item, termo, config):
+    include_keywords = config["include_keywords"]
+    exclude_keywords = config["exclude_keywords"]
+    capital_minimo = config["capital_minimo"]
+    cidades_permitidas = config["cidades_permitidas"]
+    filtrar_me_epp = config.get("filtrar_me_epp", False)
+
+    nome = item.get("titulo", "").strip()
+    link = item.get("link", "")
+    desc = item.get("descricao", "")
+
+    if not nome:
+        return None
+
+    # --- CNPJ ---
+    cnpj = extrair_cnpj_texto(desc)
+    if not cnpj and link:
+        try:
+            dominio = link.split("/")[2]
+        except Exception:
+            dominio = ""
+        if dominio and dominio not in cache_dominios:
+            cache_dominios[dominio] = extrair_cnpj_site(link)
+        cnpj = cache_dominios.get(dominio)
+
+    # --- Receita Federal ---
+    receita = None
+    if cnpj:
+        receita = cache_cnpj.get(cnpj)
+        if not receita:
+            try:
+                receita = consultar_receita(cnpj)
+                cache_cnpj[cnpj] = receita
+            except Exception:
+                receita = None
+
+    # --- Contatos (OBRIGATÓRIO) ---
+    contatos = extrair_contatos_site(link)
+    if not any(contatos.values()):
+        return None
+
+    # --- Porte, município, capital ---
+    porte = ""
+    municipio = ""
+    capital = 0
+    if receita and isinstance(receita, dict):
+        porte = str(
+            receita.get("porte")
+            or receita.get("porte_da_empresa")
+            or receita.get("porte_empresa")
+            or ""
+        ).upper()
+        municipio = str(receita.get("municipio") or "").upper()
+        capital_str = str(receita.get("capital_social") or "")
+        capital = float(re.sub(r"[^\d]", "", capital_str) or 0)
+
+    # filtro opcional para excluir ME/EPP
+    if filtrar_me_epp and porte in ["ME", "MICRO EMPRESA", "EPP", "EMPRESA DE PEQUENO PORTE"]:
+        return None
+
+    # ⚠️ MUNICÍPIO NÃO FILTRA MAIS
+    # (o geográfico já vem da query de busca; isso aqui estava cortando muito lead)
+
+    # filtro de ICP
+    texto_full = f"{nome} {desc} {termo}"
+    if not is_bom_lead(texto_full, include_keywords, exclude_keywords, capital, capital_minimo):
+        return None
+
+    # --- Redes sociais + score ---
+    redes = buscar_redes_sociais(nome)
+    score = 0
+    if contatos.get("email"): score += 2
+    if contatos.get("telefone"): score += 2
+    if contatos.get("whatsapp"): score += 3
+    if redes.get("instagram"): score += 1
+    if redes.get("facebook"): score += 1
+    if redes.get("linkedin"): score += 1
+    if receita: score += 1
+
+    dados = {
+        "nome": nome,
+        "url": link,
+        "descricao": desc,
+        "termo_busca": termo,
+        "cnpj": cnpj or "",
+        "municipio": municipio,
+        "capital": capital,
+        "porte": porte,
+        **contatos,
+        **redes,
+        "lead_score": score,
     }
 
-    /* Reset Geral */
-    .stApp {
-        background-color: var(--bg-dark);
-        background-image: 
-            radial-gradient(at 50% 0%, rgba(0, 243, 255, 0.15) 0px, transparent 50%),
-            radial-gradient(at 100% 0%, rgba(112, 0, 255, 0.1) 0px, transparent 50%);
-        background-attachment: fixed;
-        color: #e0e0e0;
-    }
+    if receita and isinstance(receita, dict):
+        dados.update(receita)
 
-    /* Ocultar elementos nativos do Streamlit que poluem a tela */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 4rem;
-        max-width: 900px; /* Limita a largura para ficar mais elegante */
-    }
+    return dados
 
-    /* --- CONTAINER PRINCIPAL (O CHASSI) --- */
-    .main-frame {
-        background: rgba(14, 17, 22, 0.7);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 24px;
-        padding: 0;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
-        overflow: hidden;
-        margin-bottom: 2rem;
-    }
 
-    /* --- HEADER DO CONTAINER --- */
-    .frame-header {
-        background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
-        padding: 2.5rem 3rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-    }
+# ==========================================================
+# 🚀 FUNÇÃO PRINCIPAL DO SCRAPER
+# ==========================================================
+def run_scraper(config, progress_callback=None):
+    """
+    Roda a prospecção com base em um dict de configuração.
 
-    .brand-title {
-        font-family: 'Inter', sans-serif;
-        font-weight: 800;
-        font-size: 2rem;
-        letter-spacing: -0.02em;
-        color: #fff;
-        margin: 0;
-        background: linear-gradient(90deg, #fff, #a5b4fc);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
+    config:
+      - termos: list[str]
+      - cidades: list[str]
+      - consultas: list[str]
+      - resultados_por_consulta: int
+      - capital_minimo: int
+      - include_keywords: list[str]
+      - exclude_keywords: list[str]
+      - filtrar_me_epp: bool
+      - score_minimo: int
+      - enviar_sheets: bool
+    """
 
-    .brand-tagline {
-        font-family: 'Inter', sans-serif;
-        color: #94a3b8;
-        font-size: 0.95rem;
-        margin-top: 0.5rem;
-        max-width: 400px;
-        line-height: 1.5;
-    }
+    termos = config.get("termos", []) or []
+    cidades = config.get("cidades", []) or []
+    consultas_customizadas = config.get("consultas", []) or []
+    resultados_por_consulta = int(config.get("resultados_por_consulta", 25))
 
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        padding: 6px 12px;
-        background: rgba(0, 243, 255, 0.1);
-        border: 1px solid rgba(0, 243, 255, 0.2);
-        border-radius: 999px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-        color: var(--primary-glow);
-        box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
-    }
-    
-    .status-dot {
-        width: 6px;
-        height: 6px;
-        background-color: var(--primary-glow);
-        border-radius: 50%;
-        margin-right: 8px;
-        box-shadow: 0 0 8px var(--primary-glow);
-    }
+    capital_minimo = int(config.get("capital_minimo", 0))
+    include_keywords = config.get("include_keywords", []) or []
+    exclude_keywords = config.get("exclude_keywords", []) or []
+    enviar_sheets = bool(config.get("enviar_sheets", True))
+    filtrar_me_epp = bool(config.get("filtrar_me_epp", False))
+    score_minimo = int(config.get("score_minimo", 0))
 
-    /* --- CORPO DO FORMULÁRIO --- */
-    .form-body {
-        padding: 3rem;
-    }
+    # calcula municípios permitidos a partir das cidades
+    # (mantemos no config só pra log/compat, mas não filtramos mais por isso)
+    cidades_permitidas = []
+    for c in cidades:
+        partes = c.split()
+        if len(partes) >= 2:
+            municipio = " ".join(partes[:-1]).upper()
+            cidades_permitidas.append(municipio)
 
-    /* Labels Estilizados */
-    .stTextArea label, .stTextInput label, .stNumberInput label {
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600 !important;
-        font-size: 0.8rem !important;
-        color: #94a3b8 !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        margin-bottom: 0.5rem !important;
-    }
+    config["capital_minimo"] = capital_minimo
+    config["include_keywords"] = include_keywords
+    config["exclude_keywords"] = exclude_keywords
+    config["cidades_permitidas"] = cidades_permitidas
+    config["filtrar_me_epp"] = filtrar_me_epp
 
-    /* Inputs Estilizados */
-    .stTextArea textarea, .stTextInput input, .stNumberInput input {
-        background-color: #0a0c10 !important; /* Fundo bem escuro */
-        border: 1px solid #2d3748 !important;
-        border-radius: 8px !important;
-        color: #f8fafc !important;
-        font-family: 'JetBrains Mono', monospace !important;
-        font-size: 0.9rem !important;
-        padding: 1rem !important;
-        transition: all 0.2s ease;
-    }
+    leads_quentes = []
+    tarefas = []
+    empresas_vistas = set()
+    pool = ThreadPoolExecutor(max_workers=20)
 
-    /* Efeito de Foco nos Inputs (Onde acontece a mágica) */
-    .stTextArea textarea:focus, .stTextInput input:focus, .stNumberInput input:focus {
-        border-color: var(--primary-glow) !important;
-        box-shadow: 0 0 0 4px rgba(0, 243, 255, 0.1) !important;
-        background-color: #0f1218 !important;
-    }
+    # consultas combinadas
+    consultas = []
+    consultas.extend(consultas_customizadas)
 
-    /* Placeholder Text */
-    ::placeholder {
-        color: #475569 !important;
-        opacity: 1;
-    }
-    
-    /* Remove a borda vermelha de erro padrão do Streamlit se houver */
-    .stTextArea div[data-baseweb="textarea"], .stTextInput div[data-baseweb="input"] {
-        border: none !important;
-    }
+    if termos and cidades:
+        for cidade in cidades:
+            for termo_base in termos:
+                consultas.append(f"{termo_base} {cidade}")
+    elif termos:
+        consultas.extend(termos)
+    elif cidades:
+        consultas.extend(cidades)
 
-    /* --- BOTÃO "INICIAR" --- */
-    div[data-testid="stButton"] > button {
-        width: 100%;
-        background: linear-gradient(92.88deg, #455EB5 9.16%, #5643CC 43.89%, #673FD7 64.72%) !important;
-        color: white !important;
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 700 !important;
-        font-size: 1rem !important;
-        padding: 0.85rem 1.5rem !important;
-        border-radius: 8px !important;
-        border: none !important;
-        box-shadow: 0 4px 14px 0 rgba(110, 88, 255, 0.39) !important;
-        transition: all 0.2s ease-in-out !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.05em !important;
-        margin-top: 1rem;
-    }
+    for termo in consultas:
+        resultados = filtrar_resultados(
+            buscar_duckduckgo(termo, num_results=resultados_por_consulta)
+        )
+        for item in resultados:
+            nome = item.get("titulo", "").strip()
+            if not nome or nome in empresas_vistas:
+                continue
+            empresas_vistas.add(nome)
+            tarefas.append(pool.submit(processar_empresa, item, termo, config))
 
-    div[data-testid="stButton"] > button:hover {
-        box-shadow: 0 6px 20px rgba(110, 88, 255, 0.23) !important;
-        transform: scale(1.01) !important;
-        filter: brightness(1.1);
-    }
+    total = len(tarefas) or 1
+    concluido = 0
 
-    div[data-testid="stButton"] > button:active {
-        transform: scale(0.98) !important;
-    }
+    for t in as_completed(tarefas):
+        try:
+            r = t.result()
+        except Exception as e:
+            print("⚠ Erro em tarefa:", e)
+            r = None
 
-    /* Ajuste fino para alinhamento das colunas de inputs pequenos */
-    div[data-testid="column"] {
-        padding: 0 5px;
-    }
-    
-    /* Help text (tooltips) styling adjustments */
-    .stTooltipIcon {
-        color: #64748b !important;
-    }
-    
-    /* Metrics Result Card styling */
-    .result-metric-card {
-        background: rgba(0, 243, 255, 0.05);
-        border: 1px solid rgba(0, 243, 255, 0.2);
-        border-radius: 12px;
-        padding: 1.5rem;
-        text-align: center;
-        margin: 1rem 0;
-    }
+        if r:
+            leads_quentes.append(r)
 
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+        concluido += 1
+        if progress_callback:
+            pct = int(concluido / total * 100)
+            progress_callback(concluido, total, pct)
 
-# ----------------------------------------------------------
-# 3. INTERFACE (HTML WIDGETS + STREAMLIT INPUTS)
-# ----------------------------------------------------------
+    # filtro por score mínimo
+    leads_quentes = [x for x in leads_quentes if x.get("lead_score", 0) >= score_minimo]
 
-st.markdown("""
-<div class="main-frame">
-    <div class="frame-header">
-        <div>
-            <h1 class="brand-title">OM MKT · Data Engine</h1>
-            <p class="brand-tagline">
-                Inteligência comercial proprietária. Configure os vetores de busca para iniciar a extração em tempo real.
-            </p>
-        </div>
-        <div style="text-align: right;">
-            <div class="status-pill">
-                <span class="status-dot"></span> SYSTEM ONLINE
-            </div>
-            <div style="margin-top:8px; font-family:'JetBrains Mono'; font-size:0.7rem; color:#64748b; text-transform:uppercase;">
-                v.2.2.0 Stable
-            </div>
-        </div>
-    </div>
-    <div class="form-body">
-""", unsafe_allow_html=True)
+    if enviar_sheets and leads_quentes:
+        atualizar_planilha_completa(
+            cred_path="credenciais.json",
+            spreadsheet_name="empresas_leads_quentes",
+            aba_dados="leads",
+            aba_cidade="resumo_cidade",
+            aba_segmento="resumo_segmento",
+            aba_top="top_clientes",
+            base_final=leads_quentes,
+        )
 
-# Termos de Busca
-termos_raw = st.text_area(
-    "Termos de Busca (Target)",
-    placeholder="Ex: Indústria Metalúrgica\nClínica de Estética\nEmpresa de Logística",
-    height=140,
-    help="Um termo por linha. O sistema fará a varredura combinada."
-)
-
-# Cidades
-cidades_raw = st.text_area(
-    "Cidades / Mercados (Geo)",
-    placeholder="Ex: São Paulo SP\nCampinas SP\nBelo Horizonte MG",
-    height=140,
-    help="Cidade e UF obrigatórios."
-)
-
-# Consultas livres
-consultas_raw = st.text_area(
-    "Consultas Livres (Opcional)",
-    placeholder="Ex:\nclínica de estética São Paulo telefone\nhospital particular Belo Horizonte contato",
-    height=120,
-    help="Use quando quiser escrever a busca exatamente como será enviada. Uma consulta por linha."
-)
-
-st.write("")
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    capital_minimo = st.number_input(
-        "Capital Social Mín (R$)",
-        min_value=0,
-        value=0,
-        step=10000,
-        help="Filtra empresas pequenas."
-    )
-
-with c2:
-    include_raw = st.text_input(
-        "Termos Obrigatórios",
-        placeholder="Ex: Ltda, S.A.",
-        help="Se preenchido, o lead DEVE conter isso."
-    )
-
-with c3:
-    exclude_raw = st.text_input(
-        "Termos Excluídos",
-        placeholder="Ex: MEI, Drogaria",
-        help="Remove leads indesejados."
-    )
-
-c4, c5, c6 = st.columns(3)
-
-with c4:
-    resultados_por_consulta = st.number_input(
-        "Resultados por Consulta",
-        min_value=5,
-        max_value=100,
-        value=25,
-        step=5,
-        help="Quantos resultados o motor deve puxar por consulta de busca."
-    )
-
-with c5:
-    score_minimo = st.number_input(
-        "Score Mínimo do Lead",
-        min_value=0,
-        max_value=20,
-        value=0,
-        step=1,
-        help="Corte mínimo do lead_score. 0 = sem corte por score."
-    )
-
-with c6:
-    filtrar_me_epp = st.checkbox(
-        "Excluir ME / EPP",
-        value=False,
-        help="Quando marcado, remove micro e pequenas empresas (ME / EPP) da base."
-    )
-
-enviar_sheets = st.checkbox(
-    "Enviar automaticamente para Google Sheets",
-    value=False,
-    help="Quando integrado ao backend, ativa o envio automático dos leads para a planilha."
-)
-
-st.write("")
-st.write("")
-
-start_button = st.button("⚡ Iniciar Varredura e Extração")
-
-st.markdown("</div></div>", unsafe_allow_html=True)
-
-# ----------------------------------------------------------
-# 4. LÓGICA E RESULTADOS (AGORA USANDO O SCRAPER REAL)
-# ----------------------------------------------------------
-
-if start_button:
-    # regra: precisa de pelo menos Termos OU Consultas, e pelo menos uma cidade
-    if (not termos_raw and not consultas_raw) or not cidades_raw:
-        st.error("⚠️ Erro de Input: Defina Termos ou Consultas Livres e pelo menos uma Cidade.")
-    else:
-        # parsing dos campos
-        termos = [t.strip() for t in termos_raw.splitlines() if t.strip()]
-        cidades = [c.strip() for c in cidades_raw.splitlines() if c.strip()]
-        consultas = [q.strip() for q in consultas_raw.splitlines() if q.strip()]
-        include_keywords = [w.strip() for w in include_raw.split(",") if w.strip()]
-        exclude_keywords = [w.strip() for w in exclude_raw.split(",") if w.strip()]
-
-        config = {
-            "termos": termos,
-            "cidades": cidades,
-            "consultas": consultas,
-            "resultados_por_consulta": int(resultados_por_consulta),
-            "capital_minimo": int(capital_minimo),
-            "include_keywords": include_keywords,
-            "exclude_keywords": exclude_keywords,
-            "filtrar_me_epp": filtrar_me_epp,
-            "score_minimo": int(score_minimo),
-            "enviar_sheets": enviar_sheets,
-        }
-
-        # status + chamada real do scraper
-        with st.status("Processando extração de dados...", expanded=True) as status:
-            st.write("Conectando aos servidores de busca...")
-            time.sleep(0.5)
-            st.write("Executando varredura e enriquecimento de leads...")
-            leads = run_scraper(config)
-            status.update(label="Processo Concluído!", state="complete", expanded=False)
-
-        if not leads:
-            st.warning("Nenhum lead encontrado com os filtros atuais. Tente relaxar os filtros ou ampliar as consultas.")
-        else:
-            df = pd.DataFrame(leads)
-
-            # escolhe colunas principais para exibir
-            cols_preferidas = ["nome", "municipio", "telefone", "whatsapp", "email", "lead_score"]
-            cols_existentes = [c for c in cols_preferidas if c in df.columns]
-
-            if cols_existentes:
-                df_view = df[cols_existentes].copy()
-                df_view = df_view.rename(columns={
-                    "nome": "Empresa",
-                    "municipio": "Cidade",
-                    "telefone": "Telefone",
-                    "whatsapp": "WhatsApp",
-                    "email": "E-mail",
-                    "lead_score": "Score"
-                })
-            else:
-                df_view = df
-
-            st.markdown(f"""
-            <div class="result-metric-card">
-                <div style="font-family: 'Inter'; font-size: 0.9rem; color: #94a3b8; text-transform: uppercase;">Leads Encontrados</div>
-                <div style="font-family: 'Inter'; font-size: 3rem; font-weight: 800; color: #fff; line-height: 1.2;">{len(df_view)}</div>
-                <div style="font-family: 'Inter'; font-size: 0.8rem; color: #00f3ff;">Prontos para exportação</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(df_view, use_container_width=True)
-
-            c_dl_1, c_dl_2, c_dl_3 = st.columns([1, 2, 1])
-            with c_dl_2:
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="📥 Baixar CSV Completo",
-                    data=csv,
-                    file_name="leads_export.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+    return leads_quentes
